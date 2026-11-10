@@ -1,0 +1,6 @@
+{
+  "name": "FutureX - تقييم الموظفين",
+  "description": "تطبيق احترافي لإدارة مهام وتقييم موظفي FutureX وحساب النقاط التلقائي وعرض لوحة الصدارة وإصدار التقارير اليومية والأسبوعية والشهرية.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

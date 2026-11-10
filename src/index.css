@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  
+  --color-brand-primary: #1a56db;
+  --color-brand-secondary: #0f766e;
+  --color-brand-light: #eff6ff;
+  --color-brand-accent: #3b82f6;
+}
+
+/* Custom scrollbar styling for a native mobile feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Ensure nice focus states and smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* ==========================================================================
+   إخفاء شارة Netlify وجميع النوافذ المنبثقة التابعة لها
+   ========================================================================== */
+#net-lify-badge,
+.netlify-badge,
+.netlify-deploy-badge,
+a[href*="netlify.com/?utm_source"],
+div:has(> a[href*="netlify.com"]),
+iframe[src*="netlify"],
+iframe[id*="netlify"],
+netlify-drawer,
+#netlify-drawer,
+.netlify-drawer,
+#netlify-badge,
+[id*="netlify-badge"],
+[class*="netlify-badge"],
+[id*="netlify-drawer"],
+[class*="netlify-drawer"],
+[data-netlify-drawer],
+div[data-netlify-identity],
+div[data-netlify-preview],
+a[href*="netlify.com"] img,
+a[href*="netlify.app"] img,
+.netlify-banner,
+#netlify-banner {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  width: 0 !important;
+  height: 0 !important;
+  z-index: -9999 !important;
+}
+

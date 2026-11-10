@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Allow read and write for all authorized collections in the applet environment
+    match /employees/{employeeId} {
+      allow read, write: if true;
+    }
+
+    match /tasks/{taskId} {
+      allow read, write: if true;
+    }
+
+    match /settings/{settingsId} {
+      allow read, write: if true;
+    }
+
+    match /leaderboard/{leaderboardId} {
+      allow read, write: if true;
+    }
+
+    match /task_types/{typeId} {
+      allow read, write: if true;
+    }
+
+    match /manual_points_history/{recordId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /attendance_records/{recordId} {
+      allow read, write: if true;
+    }
+
+    match /overtime_records/{recordId} {
+      allow read, write: if true;
+    }
+
+    match /leave_requests/{requestId} {
+      allow read, write: if true;
+    }
+
+    match /payroll_periods/{periodId} {
+      allow read, write: if true;
+    }
+
+    match /payroll_records/{recordId} {
+      allow read, write: if true;
+    }
+
+    match /audit_logs/{logId} {
+      allow read, write: if true;
+    }
+    match /grace_requests/{requestId} {
+      allow read, write: if true;
+    }
+
+    match /financial_adjustments/{adjustmentId} {
+      allow read, write: if true;
+    }
+
+    match /material_items/{itemId} {
+      allow read, write: if true;
+    }
+
+    match /technician_inventory/{stockId} {
+      allow read, write: if true;
+    }
+
+    match /material_transactions/{transactionId} {
+      allow read, write: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,308 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Represents a field technician employee",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^emp-[0-9]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "joinedAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Represents a field service task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^task-[0-9]+$" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "taskType": { "type": "string", "enum": ["installation", "maintenance", "fault", "support"] },
+        "points": { "type": "number" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "paused", "completed"] },
+        "pausedAt": { "type": "string" },
+        "pauseReason": { "type": "string" },
+        "totalPausedMs": { "type": "number" },
+        "subscriberName": { "type": "string" },
+        "subscriberPhone": { "type": "string" },
+        "assignedDate": { "type": "string" },
+        "paymentStatus": { "type": "string", "enum": ["collected", "free"] },
+        "collectedAmount": { "type": "number" },
+        "paymentNotes": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "employeeName", "taskType", "points", "startTime", "status"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "System access credentials settings",
+      "type": "object",
+      "properties": {
+        "adminUsername": { "type": "string", "minLength": 3, "maxLength": 50 },
+        "adminPassword": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "viewerUsername": { "type": "string", "minLength": 3, "maxLength": 50 },
+        "viewerPassword": { "type": "string", "minLength": 3, "maxLength": 100 }
+      },
+      "required": ["adminUsername", "adminPassword", "viewerUsername", "viewerPassword"]
+    },
+    "Leaderboard": {
+      "title": "Leaderboard",
+      "description": "Cached leaderboard rankings",
+      "type": "object",
+      "properties": {
+        "rankings": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["rankings", "updatedAt"]
+    },
+    "DbTaskType": {
+      "title": "DbTaskType",
+      "description": "Represents a dynamic task type configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "points": { "type": "number" },
+        "color": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "disabled"] },
+        "description": { "type": "string" },
+        "order": { "type": "number" },
+        "icon": { "type": "string" },
+        "visibleToTech": { "type": "boolean" }
+      },
+      "required": ["id", "name", "points", "color", "status", "order", "icon", "visibleToTech"]
+    },
+    "PointsRules": {
+      "title": "PointsRules",
+      "description": "Rules for points calculation and deductions",
+      "type": "object",
+      "properties": {
+        "delayDeductionPerMinute": { "type": "number" },
+        "maxDeduction": { "type": "number" },
+        "additionalRewards": { "type": "string" },
+        "customRules": { "type": "string" }
+      },
+      "required": ["delayDeductionPerMinute", "maxDeduction"]
+    },
+    "ManualPointsRecord": {
+      "title": "ManualPointsRecord",
+      "description": "Represents an administrative manual points modification (gift/penalty)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["gift", "penalty"] },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "points": { "type": "number" },
+        "reason": { "type": "string" },
+        "adminName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "type", "employeeId", "employeeName", "points", "reason", "adminName", "timestamp"]
+    },
+    "SystemUser": {
+      "title": "SystemUser",
+      "description": "Represents a system user with login credentials and roles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "password": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "role": { "type": "string", "enum": ["owner", "admin", "viewer"] },
+        "status": { "type": "string", "enum": ["active", "disabled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "username", "role", "status"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Represents daily check-in, check-out, lateness, and GPS location tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "date": { "type": "string" },
+        "checkInTime": { "type": "string" },
+        "checkOutTime": { "type": "string" },
+        "lateMinutes": { "type": "number" },
+        "status": { "type": "string", "enum": ["present", "late", "absent", "leave_paid", "leave_unpaid", "holiday"] },
+        "isAdjusted": { "type": "boolean" },
+        "adjustedBy": { "type": "string" },
+        "adjustmentReason": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "employeeName", "date", "status"]
+    },
+    "OvertimeRecord": {
+      "title": "OvertimeRecord",
+      "description": "Represents employee overtime sessions and manager approval status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "approvedBy": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "employeeName", "date", "startTime", "durationMinutes", "status"]
+    },
+    "LeaveRequest": {
+      "title": "LeaveRequest",
+      "description": "Represents leave requests submitted by employees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "type": { "type": "string", "enum": ["paid", "unpaid"] },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "totalDays": { "type": "number" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "requestedAt": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "employeeName", "type", "startDate", "endDate", "totalDays", "status", "requestedAt"]
+    },
+    "PayrollPeriod": {
+      "title": "PayrollPeriod",
+      "description": "Represents monthly salary calculation cycles (16th to 15th)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "actualDays": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "calculated", "closed", "archived"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "startDate", "endDate", "actualDays", "status", "createdAt"]
+    },
+    "PayrollRecord": {
+      "title": "PayrollRecord",
+      "description": "Represents calculated payroll statements for individual employees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "periodId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "basicSalary": { "type": "number" },
+        "cycleDays": { "type": "number" },
+        "dailyRate": { "type": "number" },
+        "netSalary": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "approved", "paid"] }
+      },
+      "required": ["id", "periodId", "employeeId", "employeeName", "basicSalary", "cycleDays", "dailyRate", "netSalary", "status"]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "Central audit log for all administrative modifications and operations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "action": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "userRole", "date", "time", "timestamp", "action"]
+    },
+    "CompanySettings": {
+      "title": "CompanySettings",
+      "description": "Company work hours, GPS location, tolerance limits, and salary parameters",
+      "type": "object",
+      "properties": {
+        "companyLatitude": { "type": "number" },
+        "companyLongitude": { "type": "number" },
+        "allowedRadiusMeters": { "type": "number" },
+        "workStartTime": { "type": "string" },
+        "workEndTime": { "type": "string" },
+        "earlyCheckInMinutes": { "type": "number" },
+        "lateToleranceMinutes": { "type": "number" },
+        "earlyCheckoutToleranceMinutes": { "type": "number" },
+        "maxLateMinutes": { "type": "number" },
+        "salaryCycleStartDay": { "type": "number" },
+        "salaryCycleEndDay": { "type": "number" },
+        "paidLeavesPerCycle": { "type": "number" },
+        "unpaidLeavesPerCycle": { "type": "number" },
+        "overtimeHourlyRate": { "type": "number" }
+      },
+      "required": ["companyLatitude", "companyLongitude", "allowedRadiusMeters", "workStartTime", "workEndTime"]
+    }
+  },
+  "firestore": {
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Field technicians collection"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Registered and current tasks collection"
+    },
+    "/settings/{settingsId}": {
+      "schema": "Settings",
+      "description": "System configuration and credentials document"
+    },
+    "/leaderboard/{leaderboardId}": {
+      "schema": "Leaderboard",
+      "description": "Leaderboard period rankings documents"
+    },
+    "/task_types/{typeId}": {
+      "schema": "DbTaskType",
+      "description": "Dynamic task types configuration"
+    },
+    "/settings/points_rules": {
+      "schema": "PointsRules",
+      "description": "Points rules configuration document"
+    },
+    "/manual_points_history/{recordId}": {
+      "schema": "ManualPointsRecord",
+      "description": "Administrative manual points gifts and penalties history log"
+    },
+    "/users/{userId}": {
+      "schema": "SystemUser",
+      "description": "System users credentials and permissions"
+    },
+    "/attendance_records/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Attendance check-in and check-out logs"
+    },
+    "/overtime_records/{recordId}": {
+      "schema": "OvertimeRecord",
+      "description": "Overtime sessions and approval logs"
+    },
+    "/leave_requests/{requestId}": {
+      "schema": "LeaveRequest",
+      "description": "Employee leave requests collection"
+    },
+    "/payroll_periods/{periodId}": {
+      "schema": "PayrollPeriod",
+      "description": "Monthly payroll cycle management"
+    },
+    "/payroll_records/{recordId}": {
+      "schema": "PayrollRecord",
+      "description": "Calculated employee salary records"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLogEntry",
+      "description": "Central system audit logging collection"
+    },
+    "/settings/company": {
+      "schema": "CompanySettings",
+      "description": "Company location, work shifts, and payroll parameters"
+    }
+  }
+}

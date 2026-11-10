@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>FutureX - تقييم الموظفين</title>
+    <!-- PWA primary meta tags -->
+    <meta name="theme-color" content="#1a56db" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="FutureX" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.json" />
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          await OneSignal.init({
+            appId: "d15bc5c9-8ffa-43d4-a3ce-8381301de783",
+            safari_web_id: "web.onesignal.auto.511f3fe8-4f38-4cfd-9441-4579acc1dc24",
+            notifyButton: {
+              enable: true,
+            },
+          });
+        } catch (oneSignalErr) {
+          console.warn("OneSignal initialization non-fatal warning:", oneSignalErr);
+        }
+      });
+    </script>
+    <!-- إخفاء شارة Netlify وجميع النوافذ المنبثقة التابعة لها -->
+    <style>
+      #net-lify-badge,
+      .netlify-badge,
+      .netlify-deploy-badge,
+      a[href*="netlify.com/?utm_source"],
+      div:has(> a[href*="netlify.com"]),
+      iframe[src*="netlify"],
+      iframe[id*="netlify"],
+      netlify-drawer,
+      #netlify-drawer,
+      .netlify-drawer,
+      #netlify-badge,
+      [id*="netlify-badge"],
+      [class*="netlify-badge"],
+      [id*="netlify-drawer"],
+      [class*="netlify-drawer"],
+      [data-netlify-drawer],
+      div[data-netlify-identity],
+      div[data-netlify-preview],
+      a[href*="netlify.com"] img,
+      a[href*="netlify.app"] img,
+      .netlify-banner,
+      #netlify-banner {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+        width: 0 !important;
+        height: 0 !important;
+        z-index: -9999 !important;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-50 text-slate-900 font-sans antialiased select-none">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

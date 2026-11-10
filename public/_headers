@@ -1,0 +1,44 @@
+# Default global headers
+/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Never cache index.html or root
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+# Never cache version descriptor or service workers
+/version.json
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+/firebase-messaging-sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+/OneSignalSDKWorker.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+/OneSignalSDK.sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+# Cache bundled static JS/CSS assets immutably
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
