@@ -8,7 +8,7 @@ interface LeaderboardTabProps {
   employees: Employee[];
   tasks: Task[];
   manualPoints?: ManualPointsRecord[];
-  userRole?: 'owner' | 'manager' | 'technician' | 'supervisor' | 'accountant' | string;
+  userRole?: 'owner' | 'manager' | 'technician';
 }
 
 export default function LeaderboardTab({ employees, tasks, manualPoints, userRole = 'technician' }: LeaderboardTabProps) {

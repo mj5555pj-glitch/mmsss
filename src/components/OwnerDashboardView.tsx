@@ -29,13 +29,11 @@ import {
   Layers,
   Search,
   Phone,
-  Eye,
-  Boxes,
-  Package
+  Eye
 } from 'lucide-react';
 import { Employee, Task, DbTaskType, PointsRules, ManualPointsRecord, AttendanceRecord } from '../types';
 import { getEffectiveWorkDateStr, isTechnicianEmployee, formatArabicDateOnly } from '../utils';
-import { getAttendanceRecords } from '../lib/dbService';
+import { subscribeAttendanceRecords } from '../lib/dbService';
 import TaskRegistration from './TaskRegistration';
 import ActiveTasksView from './ActiveTasksView';
 import DashboardStatsCard from './DashboardStatsCard';
@@ -61,18 +59,7 @@ interface OwnerDashboardViewProps {
     assignedDate?: string,
     parentTaskId?: string
   ) => Promise<any>;
-  onCompleteTask: (
-    id: string, 
-    endTime: string, 
-    delayReason?: string, 
-    operationDetails?: string,
-    consumedMaterials?: any[],
-    paymentInfo?: {
-      paymentStatus: 'collected' | 'free';
-      collectedAmount?: number;
-      paymentNotes?: string;
-    }
-  ) => Promise<any>;
+  onCompleteTask: (id: string, endTime: string, delayReason?: string, operationDetails?: string) => Promise<any>;
   onPauseTask: (id: string, reason: string) => Promise<any>;
   onResumeTask: (id: string) => Promise<any>;
   onCancelActiveTask: (id: string) => Promise<any>;
@@ -201,17 +188,18 @@ export default function OwnerDashboardView({
   onNavigateTab
 }: OwnerDashboardViewProps) {
   // State for attendance records
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(propAttendanceRecords || []);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(propAttendanceRecords);
 
   useEffect(() => {
     if (propAttendanceRecords && propAttendanceRecords.length > 0) {
       setAttendanceRecords(propAttendanceRecords);
       return;
     }
-    // On-demand fetch with limit 50 instead of continuous onSnapshot
-    getAttendanceRecords(false, undefined, 50)
-      .then((recs) => setAttendanceRecords(recs))
-      .catch((err) => console.error('Attendance fetch error in OwnerDashboardView:', err));
+    const unsub = subscribeAttendanceRecords(
+      (recs) => setAttendanceRecords(recs),
+      (err) => console.error('Attendance sub error in OwnerDashboardView:', err)
+    );
+    return () => unsub();
   }, [propAttendanceRecords]);
 
   // State for active cards on dashboard
@@ -521,21 +509,7 @@ export default function OwnerDashboardView({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-              <button
-                type="button"
-                onClick={() => onNavigateTab('inventory')}
-                className="p-4 bg-blue-50/70 hover:bg-blue-100/90 border border-blue-200/90 rounded-2xl transition-all cursor-pointer text-right flex flex-col justify-between space-y-2 group"
-              >
-                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                  <Boxes className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="font-black text-xs text-blue-950 block group-hover:text-blue-700">المخزون والعهد</span>
-                  <span className="text-[10px] text-blue-700 font-medium block">عهد الفنيين والمواد</span>
-                </div>
-              </button>
-
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <button
                 type="button"
                 onClick={() => onNavigateTab('employee_hr_center')}

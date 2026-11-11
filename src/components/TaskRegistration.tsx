@@ -1050,7 +1050,7 @@ export default function TaskRegistration({
                            matchedPhoneTask.status === 'active' ? '🟢 جارية' :
                            matchedPhoneTask.status === 'rejected' ? '🔴 مرفوضة' :
                            matchedPhoneTask.status === 'paused' ? '⏸️ موقوفة' :
-                           (matchedPhoneTask.status as string) === 'postponed' ? '🟣 مؤجلة' : '⏳ قيد الانتظار'}
+                           matchedPhoneTask.status === 'postponed' ? '🟣 مؤجلة' : '⏳ قيد الانتظار'}
                         </span>
                       </div>
                     )}
@@ -2449,24 +2449,6 @@ export default function TaskRegistration({
                             📝 تفاصيل ومعلومات الإنجاز (المكتوبة من الموظف/الفني):
                           </span>
                           <span>{taskItem.operationDetails || taskItem.notes}</span>
-                        </div>
-                      )}
-
-                      {/* Payment Collection Info */}
-                      {(taskItem.paymentStatus || taskItem.collectedAmount !== undefined) && (
-                        <div className={`p-2 rounded-lg border text-[10px] font-bold flex items-center justify-between ${
-                          taskItem.paymentStatus === 'collected' || (taskItem.collectedAmount && taskItem.collectedAmount > 0)
-                            ? 'bg-emerald-50 text-emerald-950 border-emerald-200'
-                            : 'bg-blue-50 text-blue-900 border-blue-100'
-                        }`}>
-                          <span>💰 التحصيل من المشترك:</span>
-                          {taskItem.paymentStatus === 'collected' || (taskItem.collectedAmount && taskItem.collectedAmount > 0) ? (
-                            <span className="font-mono font-black text-emerald-800">
-                              تم استلام {Number(taskItem.collectedAmount || 0).toLocaleString('ar-EG')} د.ع {taskItem.paymentNotes ? `(${taskItem.paymentNotes})` : ''}
-                            </span>
-                          ) : (
-                            <span className="text-blue-700 font-extrabold">مجاناً (بدون تحصيل)</span>
-                          )}
                         </div>
                       )}
 

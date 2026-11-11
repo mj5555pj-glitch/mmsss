@@ -39,18 +39,7 @@ interface TaskManagementCenterProps {
     assignedDate?: string,
     parentTaskId?: string
   ) => void;
-  onCompleteTask: (
-    id: string, 
-    endTime: string, 
-    delayReason?: string, 
-    operationDetails?: string,
-    consumedMaterials?: any[],
-    paymentInfo?: {
-      paymentStatus: 'collected' | 'free';
-      collectedAmount?: number;
-      paymentNotes?: string;
-    }
-  ) => void;
+  onCompleteTask: (id: string, endTime: string, delayReason?: string, operationDetails?: string) => void;
   onPauseTask: (id: string, reason: string) => void;
   onResumeTask: (id: string) => void;
   onCancelActiveTask: (id: string) => void;

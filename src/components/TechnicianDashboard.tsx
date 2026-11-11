@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, CheckCircle2, Clock, MapPin, Phone, AlertCircle, Inbox, 
   Award, Play, Pause, X, ChevronDown, Check, History, ChevronRight, RefreshCw, Search, Send,
-  Lock, XCircle, Calendar, Package, Boxes, Plus, Trash2, Banknote
+  Lock, XCircle, Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Employee, Task, ManualPointsRecord, DbTaskType, TaskType, ConsumedMaterial, TechnicianStockItem, MaterialItem } from '../types';
+import { Employee, Task, ManualPointsRecord, DbTaskType, TaskType } from '../types';
 import { isToday, formatArabicTimeOnly, formatArabicDateOnly, formatMsToHMS, getTaskTimeLimitMinutes } from '../utils';
-import { getTechnicianInventory, getMaterialItems } from '../lib/dbService';
 import CopyPhoneButton from './CopyPhoneButton';
 import TechnicianAttendanceCard from './TechnicianAttendanceCard';
 import TechnicianCycleHistoryCard from './TechnicianCycleHistoryCard';
@@ -25,18 +24,7 @@ interface TechnicianDashboardProps {
   taskTypes?: DbTaskType[];
   onAcceptTask?: (taskId: string) => void;
   onRejectTask?: (taskId: string, reason: string) => void;
-  onCompleteTask?: (
-    taskId: string, 
-    endTime: string, 
-    delayReason?: string, 
-    operationDetails?: string, 
-    consumedMaterials?: ConsumedMaterial[],
-    paymentInfo?: {
-      paymentStatus: 'collected' | 'free';
-      collectedAmount?: number;
-      paymentNotes?: string;
-    }
-  ) => void;
+  onCompleteTask?: (taskId: string, endTime: string, delayReason?: string, operationDetails?: string) => void;
   onPauseTask?: (taskId: string, reason: string) => void;
   onResumeTask?: (taskId: string) => void;
   onRequestReopenTask?: (taskId: string, reason: string, newTaskType?: string) => void;
@@ -62,24 +50,6 @@ export default function TechnicianDashboard({
   const [completionOperationDetails, setCompletionOperationDetails] = useState<string>('');
   const [completionDelayReason, setCompletionDelayReason] = useState<string>('');
   const [completionDelayError, setCompletionDelayError] = useState<string>('');
-
-  // Payment Collection state (تحصيل أموال من المشترك أو مجاناً)
-  const [paymentStatus, setPaymentStatus] = useState<'free' | 'collected'>('free');
-  const [collectedAmount, setCollectedAmount] = useState<number | ''>('');
-  const [paymentNotes, setPaymentNotes] = useState<string>('');
-
-  // Technician inventory state for task completion
-  const [techStocks, setTechStocks] = useState<TechnicianStockItem[]>([]);
-  const [catalogMaterials, setCatalogMaterials] = useState<MaterialItem[]>([]);
-  const [consumedItems, setConsumedItems] = useState<Array<{ materialId: string; quantity: number; notes?: string }>>([]);
-
-  useEffect(() => {
-    if (completingTask && employee?.id) {
-      getTechnicianInventory(employee.id).then(setTechStocks).catch(console.warn);
-      getMaterialItems().then(setCatalogMaterials).catch(console.warn);
-      setConsumedItems([]);
-    }
-  }, [completingTask, employee?.id]);
 
   // Rejection Modal state
   const [rejectingTaskId, setRejectingTaskId] = useState<string | null>(null);
@@ -186,9 +156,6 @@ export default function TechnicianDashboard({
     setCompletionOperationDetails(task.operationDetails || '');
     setCompletionDelayReason(task.delayReason || '');
     setCompletionDelayError('');
-    setPaymentStatus(task.paymentStatus === 'collected' ? 'collected' : 'free');
-    setCollectedAmount(task.collectedAmount && task.collectedAmount > 0 ? task.collectedAmount : '');
-    setPaymentNotes(task.paymentNotes || '');
   };
 
   const handleConfirmCompletionDelay = (e: React.FormEvent) => {
@@ -198,14 +165,6 @@ export default function TechnicianDashboard({
     if (!completionOperationDetails.trim()) {
       setCompletionDelayError('يرجى كتابة معلومات العملية (تفاصيل التنفيذ والإنجاز) أولاً. هذا الحقل إجباري.');
       return;
-    }
-
-    if (paymentStatus === 'collected') {
-      const parsedAmount = Number(collectedAmount);
-      if (!parsedAmount || parsedAmount <= 0) {
-        setCompletionDelayError('يرجى إدخال المبلغ المحصل من المشترك بالدينار العراقي، أو اختيار خيار (مجاناً).');
-        return;
-      }
     }
 
     const start = new Date(completingTask.startTime).getTime();
@@ -222,44 +181,18 @@ export default function TechnicianDashboard({
       return;
     }
 
-    const enrichedConsumedMaterials: ConsumedMaterial[] = consumedItems
-      .filter(i => i.materialId && i.quantity > 0)
-      .map(i => {
-        const stockItem = techStocks.find(s => s.materialId === i.materialId);
-        const catalogItem = catalogMaterials.find(m => m.id === i.materialId);
-        return {
-          materialId: i.materialId,
-          materialName: stockItem?.materialName || catalogItem?.name || 'مادة',
-          unit: stockItem?.unit || catalogItem?.unit || 'قطعة',
-          quantity: i.quantity,
-          notes: i.notes
-        };
-      });
-
-    const paymentInfo = {
-      paymentStatus,
-      collectedAmount: paymentStatus === 'collected' ? Math.max(0, Number(collectedAmount) || 0) : 0,
-      paymentNotes: paymentNotes.trim() || undefined
-    };
-
     if (onCompleteTask) {
       onCompleteTask(
         completingTask.id, 
         new Date().toISOString(), 
         completionDelayReason.trim() || undefined,
-        completionOperationDetails.trim(),
-        enrichedConsumedMaterials.length > 0 ? enrichedConsumedMaterials : undefined,
-        paymentInfo
+        completionOperationDetails.trim()
       );
     }
     setCompletingTask(null);
     setCompletionOperationDetails('');
     setCompletionDelayReason('');
     setCompletionDelayError('');
-    setConsumedItems([]);
-    setPaymentStatus('free');
-    setCollectedAmount('');
-    setPaymentNotes('');
   };
 
   const handleConfirmReject = (e: React.FormEvent) => {
@@ -1095,244 +1028,6 @@ export default function TechnicianDashboard({
                       placeholder="اكتب تفاصيل الإنجاز الميدانية والتنفيذية (مثل: تم ربط الراوتر، صيانة الكابل الخارجي، قياس الإشارة، إدخال بيانات المشترك...)"
                       className="w-full text-xs p-3 rounded-2xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none transition-all text-slate-800 font-medium"
                     ></textarea>
-                  </div>
-
-                  {/* Dispense Materials to Subscriber (صرف مواد للمشترك من عهدة الفني) */}
-                  <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-blue-600" />
-                        <span className="text-xs font-black text-slate-800">صرف مواد ومستلزمات للمشترك</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const firstAvailable = techStocks.find(s => s.quantity > 0)?.materialId || catalogMaterials[0]?.id || '';
-                          setConsumedItems([...consumedItems, { materialId: firstAvailable, quantity: 1, notes: '' }]);
-                        }}
-                        className="text-[11px] text-blue-600 hover:text-blue-800 font-black flex items-center gap-1 cursor-pointer bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>+ صرف مادة</span>
-                      </button>
-                    </div>
-
-                    {consumedItems.length === 0 ? (
-                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                        هل قمت بتركيب راوتر، أونيو، أو تمديد كابل ألياف ضوئية للمشترك؟ اضغط على <strong>+ صرف مادة</strong> لتسجيلها وسيتم خصمها من عهدتك تلقائياً.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {consumedItems.map((item, idx) => {
-                          const stockItem = techStocks.find(s => s.materialId === item.materialId);
-                          const catalogItem = catalogMaterials.find(m => m.id === item.materialId);
-                          const unit = stockItem?.unit || catalogItem?.unit || 'قطعة';
-                          const availableQty = stockItem ? stockItem.quantity : 0;
-                          const isExceeding = item.quantity > availableQty;
-
-                          return (
-                            <div key={idx} className="bg-white p-2.5 rounded-xl border border-slate-200 space-y-2 shadow-xs">
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={item.materialId}
-                                  onChange={(e) => {
-                                    const updated = [...consumedItems];
-                                    updated[idx].materialId = e.target.value;
-                                    setConsumedItems(updated);
-                                  }}
-                                  className="flex-1 text-xs p-2 rounded-xl border border-slate-200 font-bold text-slate-800 outline-none bg-white"
-                                >
-                                  <option value="">-- اختر المادة --</option>
-                                  {techStocks.filter(s => s.quantity > 0).map(s => (
-                                    <option key={s.materialId} value={s.materialId}>
-                                      {s.materialName} (متوفر لديك: {s.quantity} {s.unit})
-                                    </option>
-                                  ))}
-                                  {catalogMaterials
-                                    .filter(m => !techStocks.some(s => s.materialId === m.id && s.quantity > 0))
-                                    .map(m => (
-                                      <option key={m.id} value={m.id}>
-                                        {m.name} (غير متوفر بعهدتك)
-                                      </option>
-                                    ))}
-                                </select>
-
-                                <div className="flex items-center gap-1 w-24 shrink-0">
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={item.quantity}
-                                    onChange={(e) => {
-                                      const updated = [...consumedItems];
-                                      updated[idx].quantity = Math.max(1, parseInt(e.target.value) || 1);
-                                      setConsumedItems(updated);
-                                    }}
-                                    className="w-full text-xs p-2 text-center font-mono font-black text-amber-700 rounded-xl border border-slate-200 outline-none"
-                                    placeholder="الكمية"
-                                  />
-                                  <span className="text-[10px] text-slate-500 font-bold shrink-0">{unit}</span>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = consumedItems.filter((_, i) => i !== idx);
-                                    setConsumedItems(updated);
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
-                                  title="إلغاء المادة"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-
-                              {isExceeding && availableQty > 0 && (
-                                <span className="text-[10px] text-amber-600 font-bold block bg-amber-50 px-2 py-0.5 rounded-md">
-                                  تنبيه: الكمية المدخلة ({item.quantity}) تتجاوز رصيدك الحالي ({availableQty})
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Subscriber Payment Collection (تحصيل أموال من المشترك أو مجاناً) */}
-                  <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 md:p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
-                        <Banknote className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-xs font-black text-slate-900 block">تحصيل أجور / مبالغ من المشترك</span>
-                        <span className="text-[11px] text-slate-500 font-medium">حدد ما إذا تم استلام أجور نقدية من المشترك أو تمت الخدمة مجاناً</span>
-                      </div>
-                    </div>
-
-                    {/* Radio Options: Free vs Collected */}
-                    <div className="grid grid-cols-2 gap-2.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPaymentStatus('free');
-                          setCollectedAmount('');
-                          setPaymentNotes('');
-                          setCompletionDelayError('');
-                        }}
-                        className={`p-3 rounded-2xl border text-right transition-all cursor-pointer flex items-start gap-2.5 ${
-                          paymentStatus === 'free'
-                            ? 'bg-blue-50/90 border-blue-400 text-blue-950 shadow-2xs ring-2 ring-blue-200'
-                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0 ${
-                          paymentStatus === 'free' ? 'border-blue-600 bg-blue-600' : 'border-slate-300'
-                        }`}>
-                          {paymentStatus === 'free' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                        <div>
-                          <span className="text-xs font-black block">مجاناً (بدون تحصيل)</span>
-                          <span className="text-[10px] text-slate-500 font-medium block mt-0.5">ضمن الاشتراك / صيانة دورية</span>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPaymentStatus('collected');
-                          setCompletionDelayError('');
-                        }}
-                        className={`p-3 rounded-2xl border text-right transition-all cursor-pointer flex items-start gap-2.5 ${
-                          paymentStatus === 'collected'
-                            ? 'bg-emerald-50/90 border-emerald-400 text-emerald-950 shadow-2xs ring-2 ring-emerald-200'
-                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className={`w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0 ${
-                          paymentStatus === 'collected' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'
-                        }`}>
-                          {paymentStatus === 'collected' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                        <div>
-                          <span className="text-xs font-black block">تحصيل أجور نقدية</span>
-                          <span className="text-[10px] text-slate-500 font-medium block mt-0.5">استلام مبالغ من المشترك</span>
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* Amount Input & Quick Chips (if collected) */}
-                    {paymentStatus === 'collected' && (
-                      <div className="bg-white p-3.5 rounded-2xl border border-emerald-200 space-y-3 mt-2 shadow-2xs">
-                        <div>
-                          <label className="block text-xs font-black text-slate-800 mb-1.5 flex items-center justify-between">
-                            <span>المبلغ المحصل من المشترك <span className="text-red-500">*</span></span>
-                            {collectedAmount !== '' && Number(collectedAmount) > 0 && (
-                              <span className="text-[11px] font-mono font-black text-emerald-700">
-                                {Number(collectedAmount).toLocaleString('ar-EG')} د.ع
-                              </span>
-                            )}
-                          </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min="250"
-                              step="250"
-                              required
-                              value={collectedAmount}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
-                                setCollectedAmount(val);
-                                setCompletionDelayError('');
-                              }}
-                              placeholder="أدخل المبلغ المحصل... مثال: 15000"
-                              className="w-full text-sm p-2.5 pr-3 pl-16 rounded-xl border border-slate-300 font-mono font-black text-emerald-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                            />
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">
-                              د.ع
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Quick Amount Presets */}
-                        <div>
-                          <span className="text-[10.5px] font-bold text-slate-400 block mb-1.5">مبالغ شائعة سريعة:</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {[5000, 10000, 15000, 20000, 25000, 30000, 50000].map((amt) => (
-                              <button
-                                key={amt}
-                                type="button"
-                                onClick={() => {
-                                  setCollectedAmount(amt);
-                                  setCompletionDelayError('');
-                                }}
-                                className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
-                                  collectedAmount === amt
-                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                                    : 'bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 border-slate-200'
-                                }`}
-                              >
-                                {amt.toLocaleString('ar-EG')} د.ع
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-black text-slate-800 mb-1">
-                            ملاحظات أو سبب التحصيل (اختياري)
-                          </label>
-                          <input
-                            type="text"
-                            value={paymentNotes}
-                            onChange={(e) => setPaymentNotes(e.target.value)}
-                            placeholder="مثال: أجور تمديد كابل خارجي، استبدال راوتر جديد..."
-                            className="w-full text-xs p-2.5 rounded-xl border border-slate-200 outline-none focus:border-emerald-500 font-medium text-slate-800"
-                          />
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* Overtime Notice & Delay Reason */}

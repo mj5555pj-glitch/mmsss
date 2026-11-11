@@ -19,10 +19,9 @@ import {
   ChevronDown,
   History,
   RefreshCw,
-  Send,
-  Banknote
+  Send
 } from 'lucide-react';
-import { Employee, Task, DbTaskType, PointsRules, ConsumedMaterial } from '../types';
+import { Employee, Task, DbTaskType, PointsRules } from '../types';
 import { formatMsToHMS, formatArabicTimeOnly, formatArabicDateOnly, calculateTaskPoints, toLocalInputString, getTaskTimeLimitMinutes } from '../utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -60,18 +59,7 @@ interface ActiveTasksViewProps {
     assignedDate?: string,
     parentTaskId?: string
   ) => void;
-  onCompleteTask: (
-    id: string, 
-    endTime: string, 
-    delayReason?: string, 
-    operationDetails?: string,
-    consumedMaterials?: ConsumedMaterial[],
-    paymentInfo?: {
-      paymentStatus: 'collected' | 'free';
-      collectedAmount?: number;
-      paymentNotes?: string;
-    }
-  ) => void;
+  onCompleteTask: (id: string, endTime: string, delayReason?: string, operationDetails?: string) => void;
   onPauseTask: (id: string, reason: string) => void;
   onResumeTask: (id: string) => void;
   onCancelActiveTask: (id: string) => void;
@@ -161,12 +149,6 @@ export default function ActiveTasksView({
   const [showPauseDialog, setShowPauseDialog] = useState<string | null>(null);
   const [confirmCompleteTask, setConfirmCompleteTask] = useState<Task | null>(null);
   const [completionOperationDetails, setCompletionOperationDetails] = useState('');
-
-  // Subscriber payment collection states
-  const [paymentStatus, setPaymentStatus] = useState<'free' | 'collected'>('free');
-  const [collectedAmount, setCollectedAmount] = useState<number | ''>('');
-  const [paymentNotes, setPaymentNotes] = useState('');
-  
   const [pauseReason, setPauseReason] = useState('');
   const [pauseError, setPauseError] = useState('');
 
@@ -1190,15 +1172,7 @@ export default function ActiveTasksView({
                             <div className="grid grid-cols-2 gap-2">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setConfirmCompleteTask(task);
-                                  setCompletionOperationDetails(task.operationDetails || '');
-                                  setCompletionDelayReason(task.delayReason || '');
-                                  setCompletionDelayError('');
-                                  setPaymentStatus(task.paymentStatus === 'collected' ? 'collected' : 'free');
-                                  setCollectedAmount(task.collectedAmount && task.collectedAmount > 0 ? task.collectedAmount : '');
-                                  setPaymentNotes(task.paymentNotes || '');
-                                }}
+                                onClick={() => setConfirmCompleteTask(task)}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-2 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -1425,142 +1399,6 @@ export default function ActiveTasksView({
                   ></textarea>
                 </div>
 
-                {/* Subscriber Payment Collection (تحصيل أموال من المشترك أو مجاناً) */}
-                <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
-                      <Banknote className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-black text-slate-900 block">تحصيل أجور / مبالغ من المشترك</span>
-                      <span className="text-[11px] text-slate-500 font-medium">حدد ما إذا تم استلام أجور نقدية من المشترك أو تمت الخدمة مجاناً</span>
-                    </div>
-                  </div>
-
-                  {/* Radio Options: Free vs Collected */}
-                  <div className="grid grid-cols-2 gap-2.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPaymentStatus('free');
-                        setCollectedAmount('');
-                        setPaymentNotes('');
-                        setCompletionDelayError('');
-                      }}
-                      className={`p-3 rounded-2xl border text-right transition-all cursor-pointer flex items-start gap-2.5 ${
-                        paymentStatus === 'free'
-                          ? 'bg-blue-50/90 border-blue-400 text-blue-950 shadow-2xs ring-2 ring-blue-200'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0 ${
-                        paymentStatus === 'free' ? 'border-blue-600 bg-blue-600' : 'border-slate-300'
-                      }`}>
-                        {paymentStatus === 'free' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                      <div>
-                        <span className="text-xs font-black block">مجاناً (بدون تحصيل)</span>
-                        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">ضمن الاشتراك / صيانة دورية</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPaymentStatus('collected');
-                        setCompletionDelayError('');
-                      }}
-                      className={`p-3 rounded-2xl border text-right transition-all cursor-pointer flex items-start gap-2.5 ${
-                        paymentStatus === 'collected'
-                          ? 'bg-emerald-50/90 border-emerald-400 text-emerald-950 shadow-2xs ring-2 ring-emerald-200'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full mt-0.5 border flex items-center justify-center shrink-0 ${
-                        paymentStatus === 'collected' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'
-                      }`}>
-                        {paymentStatus === 'collected' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                      </div>
-                      <div>
-                        <span className="text-xs font-black block">تحصيل أجور نقدية</span>
-                        <span className="text-[10px] text-slate-500 font-medium block mt-0.5">استلام مبالغ من المشترك</span>
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Amount Input & Quick Chips (if collected) */}
-                  {paymentStatus === 'collected' && (
-                    <div className="bg-white p-3.5 rounded-2xl border border-emerald-200 space-y-3 mt-2 shadow-2xs">
-                      <div>
-                        <label className="block text-xs font-black text-slate-800 mb-1.5 flex items-center justify-between">
-                          <span>المبلغ المحصل من المشترك <span className="text-red-500">*</span></span>
-                          {collectedAmount !== '' && Number(collectedAmount) > 0 && (
-                            <span className="text-[11px] font-mono font-black text-emerald-700">
-                              {Number(collectedAmount).toLocaleString('ar-EG')} د.ع
-                            </span>
-                          )}
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            min="250"
-                            step="250"
-                            required
-                            value={collectedAmount}
-                            onChange={(e) => {
-                              const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
-                              setCollectedAmount(val);
-                              setCompletionDelayError('');
-                            }}
-                            placeholder="أدخل المبلغ المحصل... مثال: 15000"
-                            className="w-full text-sm p-2.5 pr-3 pl-16 rounded-xl border border-slate-300 font-mono font-black text-emerald-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                          />
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">
-                            د.ع
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Quick Amount Presets */}
-                      <div>
-                        <span className="text-[10.5px] font-bold text-slate-400 block mb-1.5">مبالغ شائعة سريعة:</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[5000, 10000, 15000, 20000, 25000, 30000, 50000].map((amt) => (
-                            <button
-                              key={amt}
-                              type="button"
-                              onClick={() => {
-                                setCollectedAmount(amt);
-                                setCompletionDelayError('');
-                              }}
-                              className={`px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
-                                collectedAmount === amt
-                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                                  : 'bg-slate-50 text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 border-slate-200'
-                              }`}
-                            >
-                              {amt.toLocaleString('ar-EG')} د.ع
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-black text-slate-800 mb-1">
-                          ملاحظات أو سبب التحصيل (اختياري)
-                        </label>
-                        <input
-                          type="text"
-                          value={paymentNotes}
-                          onChange={(e) => setPaymentNotes(e.target.value)}
-                          placeholder="مثال: أجور تمديد كابل خارجي، استبدال راوتر جديد..."
-                          className="w-full text-xs p-2.5 rounded-xl border border-slate-200 outline-none focus:border-emerald-500 font-medium text-slate-800"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
                 {isOverdue && (
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1.5">
@@ -1594,39 +1432,20 @@ export default function ActiveTasksView({
                         setCompletionDelayError('يرجى كتابة معلومات العملية (تفاصيل التنفيذ والإنجاز) أولاً.');
                         return;
                       }
-                      if (paymentStatus === 'collected') {
-                        const parsed = Number(collectedAmount);
-                        if (!parsed || parsed <= 0) {
-                          setCompletionDelayError('يرجى إدخال المبلغ المحصل من المشترك بالدينار، أو اختيار خيار (مجاناً).');
-                          return;
-                        }
-                      }
                       if (isOverdue && !completionDelayReason.trim()) {
                         setCompletionDelayError('يرجى كتابة سبب التأخير لتأكيد إكمال المهمة وإرساله للمسؤولين.');
                         return;
                       }
-
-                      const paymentInfo = {
-                        paymentStatus,
-                        collectedAmount: paymentStatus === 'collected' ? Math.max(0, Number(collectedAmount) || 0) : 0,
-                        paymentNotes: paymentNotes.trim() || undefined
-                      };
-
                       onCompleteTask(
                         confirmCompleteTask.id, 
                         new Date().toISOString(), 
                         completionDelayReason.trim() || undefined,
-                        completionOperationDetails.trim(),
-                        undefined,
-                        paymentInfo
+                        completionOperationDetails.trim()
                       );
                       setConfirmCompleteTask(null);
                       setCompletionOperationDetails('');
                       setCompletionDelayReason('');
                       setCompletionDelayError('');
-                      setPaymentStatus('free');
-                      setCollectedAmount('');
-                      setPaymentNotes('');
                     }}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1 shadow-xs"
                   >
@@ -1639,9 +1458,6 @@ export default function ActiveTasksView({
                       setCompletionOperationDetails('');
                       setCompletionDelayReason('');
                       setCompletionDelayError('');
-                      setPaymentStatus('free');
-                      setCollectedAmount('');
-                      setPaymentNotes('');
                     }}
                     className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold py-2.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1"
                   >

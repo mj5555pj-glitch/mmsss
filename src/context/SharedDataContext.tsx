@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import { safeGetLocalStorage } from '../utils';
 import {
   Employee,
   Task,
@@ -26,8 +25,6 @@ import {
   subscribeUsers,
   subscribeCompanySettings,
   subscribeAttendanceRecords,
-  getTasks,
-  getAttendanceRecords,
   getManualPoints,
   getManualPointsCachedSync,
   getPayrollRecords,
@@ -63,8 +60,6 @@ export interface SharedDataContextValue {
   } | null;
   loading: boolean;
   dbError: string | null;
-  fetchTasks: (force?: boolean, limitCount?: number) => Promise<Task[]>;
-  fetchAttendanceRecords: (force?: boolean, limitCount?: number) => Promise<AttendanceRecord[]>;
   fetchManualPoints: (force?: boolean) => Promise<ManualPointsRecord[]>;
   fetchPayrollRecords: (force?: boolean) => Promise<PayrollRecord[]>;
   fetchFinancialAdjustments: (force?: boolean) => Promise<FinancialAdjustment[]>;
@@ -73,19 +68,7 @@ export interface SharedDataContextValue {
 
 const SharedDataContext = createContext<SharedDataContextValue | null>(null);
 
-export interface SharedDataProviderProps {
-  children: ReactNode;
-  currentEmployeeId?: string | null;
-  currentUserRole?: string | null;
-  activeTab?: string;
-}
-
-export function SharedDataProvider({
-  children,
-  currentEmployeeId: propEmployeeId,
-  currentUserRole: propUserRole,
-  activeTab: propActiveTab
-}: SharedDataProviderProps) {
+export function SharedDataProvider({ children }: { children: ReactNode }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskTypes, setTaskTypes] = useState<DbTaskType[]>([]);
@@ -105,103 +88,26 @@ export function SharedDataProvider({
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
 
-  // Active identity tracking: prioritize props, fallback to local storage
-  const [activeEmployeeId, setActiveEmployeeId] = useState<string | null>(() => {
-    return propEmployeeId !== undefined ? propEmployeeId : safeGetLocalStorage('futurex_logged_in_employee_id');
-  });
-  const [activeRole, setActiveRole] = useState<string>(() => {
-    return propUserRole !== undefined ? propUserRole : (safeGetLocalStorage('futurex_user_role') || 'technician');
-  });
-
-  useEffect(() => {
-    if (propEmployeeId !== undefined) {
-      setActiveEmployeeId(propEmployeeId);
-    } else {
-      const stored = safeGetLocalStorage('futurex_logged_in_employee_id');
-      if (stored !== activeEmployeeId) {
-        setActiveEmployeeId(stored);
-      }
-    }
-  }, [propEmployeeId]);
-
-  useEffect(() => {
-    if (propUserRole !== undefined) {
-      setActiveRole(propUserRole);
-    } else {
-      const stored = safeGetLocalStorage('futurex_user_role') || 'technician';
-      if (stored !== activeRole) {
-        setActiveRole(stored);
-      }
-    }
-  }, [propUserRole]);
-
-  // On-demand fetchers with 30-50 record limits for Owner / Manager
-  const fetchTasks = async (force: boolean = false, limitCount: number = 50) => {
-    const isTechnician = activeRole === 'technician';
-    const targetEmpId = isTechnician ? (activeEmployeeId || undefined) : undefined;
-    const data = await getTasks(force, limitCount, targetEmpId);
-    setTasks(data);
-    return data;
-  };
-
-  const fetchAttendanceRecords = async (force: boolean = false, limitCount: number = 50) => {
-    const isTechnician = activeRole === 'technician';
-    const targetEmpId = isTechnician ? (activeEmployeeId || undefined) : undefined;
-    const data = await getAttendanceRecords(force, targetEmpId, limitCount);
-    setAttendanceRecords(data);
-    return data;
-  };
-
   useEffect(() => {
     let isMounted = true;
     const noopError = () => {};
 
-    const isTechnician = activeRole === 'technician';
-    const targetEmployeeId = isTechnician ? (activeEmployeeId || undefined) : undefined;
-    const isPrivileged = activeRole === 'owner' || activeRole === 'manager';
+    // 1. Tasks (Always Real-Time)
+    const unsubTasks = subscribeTasks(
+      (list) => {
+        if (!isMounted) return;
+        setTasks(list);
+      },
+      (err) => {
+        if (!isMounted) return;
+        const isOffline = (err as any)?.code === 'unavailable' || String(err).includes('unavailable');
+        if (!isOffline && tasks.length === 0) {
+          setDbError('فشل تحميل المهام من قاعدة البيانات.');
+        }
+      }
+    );
 
-    let unsubTasks: (() => void) | null = null;
-    let unsubAttendance: (() => void) | null = null;
-
-    if (isTechnician && targetEmployeeId) {
-      // 1. Technicians: Lightweight listener strictly scoped by where('employeeId', '==', targetEmployeeId) with limit(50)
-      unsubTasks = subscribeTasks(
-        (list) => {
-          if (!isMounted) return;
-          setTasks(list);
-        },
-        (err) => {
-          if (!isMounted) return;
-          const isOffline = (err as any)?.code === 'unavailable' || String(err).includes('unavailable');
-          if (!isOffline && tasks.length === 0) {
-            setDbError('فشل تحميل المهام من قاعدة البيانات.');
-          }
-        },
-        targetEmployeeId
-      );
-
-      unsubAttendance = subscribeAttendanceRecords(
-        (list) => {
-          if (!isMounted) return;
-          setAttendanceRecords(list);
-        },
-        noopError,
-        targetEmployeeId
-      );
-    } else {
-      // 1b. Owner / Manager: Convert large collection queries (Tasks & Attendance)
-      // from continuous real-time onSnapshot to on-demand getDocs with limit 50!
-      // This stops endless background reads across thousands of historical records.
-      getTasks(false, 50).then((list) => {
-        if (isMounted) setTasks(list);
-      }).catch(noopError);
-
-      getAttendanceRecords(false, undefined, 50).then((list) => {
-        if (isMounted) setAttendanceRecords(list);
-      }).catch(noopError);
-    }
-
-    // 2. Employees (Real-Time lightweight list)
+    // 2. Employees (Real-Time)
     const unsubEmployees = subscribeEmployees(
       (list) => {
         if (!isMounted) return;
@@ -218,21 +124,14 @@ export function SharedDataProvider({
       }
     );
 
-    // 3. Settings & Credentials: Pruned for background screens
-    // Only active when on settings screens; otherwise closed to prevent unnecessary reads
-    let unsubSettings: (() => void) | null = null;
-    const isSettingsScreen = !propActiveTab || propActiveTab === 'settings' || propActiveTab === 'hr_settings';
-    if (isPrivileged && isSettingsScreen) {
-      unsubSettings = subscribeSettings(
-        (creds) => {
-          if (!isMounted) return;
-          if (creds) setAdminCredentials(creds);
-        },
-        noopError
-      );
-    } else {
-      setAdminCredentials(null);
-    }
+    // 3. Settings & Credentials
+    const unsubSettings = subscribeSettings(
+      (creds) => {
+        if (!isMounted) return;
+        if (creds) setAdminCredentials(creds);
+      },
+      noopError
+    );
 
     // 4. Task Types
     const unsubTaskTypes = subscribeTaskTypes(
@@ -252,21 +151,14 @@ export function SharedDataProvider({
       noopError
     );
 
-    // 6. Users: Pruned for background screens
-    // Only active when in users / HR settings screen; otherwise closed to prevent unnecessary reads
-    let unsubUsers: (() => void) | null = null;
-    const isUsersScreen = !propActiveTab || propActiveTab === 'settings' || propActiveTab === 'employee_hr_center' || propActiveTab === 'users';
-    if (isPrivileged && isUsersScreen) {
-      unsubUsers = subscribeUsers(
-        (list) => {
-          if (!isMounted) return;
-          setUsers(list);
-        },
-        noopError
-      );
-    } else {
-      setUsers([]);
-    }
+    // 6. Users
+    const unsubUsers = subscribeUsers(
+      (list) => {
+        if (!isMounted) return;
+        setUsers(list);
+      },
+      noopError
+    );
 
     // 7. Company Settings
     const unsubCompanySettings = subscribeCompanySettings(
@@ -277,18 +169,27 @@ export function SharedDataProvider({
       noopError
     );
 
+    // 8. Attendance Records (for task assignment availability)
+    const unsubAttendance = subscribeAttendanceRecords(
+      (list) => {
+        if (!isMounted) return;
+        setAttendanceRecords(list);
+      },
+      noopError
+    );
+
     return () => {
       isMounted = false;
-      if (unsubTasks) unsubTasks();
-      if (unsubEmployees) unsubEmployees();
-      if (unsubSettings) unsubSettings();
-      if (unsubTaskTypes) unsubTaskTypes();
-      if (unsubPointsRules) unsubPointsRules();
-      if (unsubUsers) unsubUsers();
-      if (unsubCompanySettings) unsubCompanySettings();
-      if (unsubAttendance) unsubAttendance();
+      unsubTasks();
+      unsubEmployees();
+      unsubSettings();
+      unsubTaskTypes();
+      unsubPointsRules();
+      unsubUsers();
+      unsubCompanySettings();
+      unsubAttendance();
     };
-  }, [activeEmployeeId, activeRole, propActiveTab]);
+  }, []);
 
   const fetchManualPoints = async (force: boolean = false) => {
     const data = await getManualPoints(force);
@@ -333,8 +234,6 @@ export function SharedDataProvider({
     adminCredentials,
     loading,
     dbError,
-    fetchTasks,
-    fetchAttendanceRecords,
     fetchManualPoints,
     fetchPayrollRecords,
     fetchFinancialAdjustments,
@@ -357,9 +256,7 @@ export function SharedDataProvider({
     financialAdjustments,
     adminCredentials,
     loading,
-    dbError,
-    activeRole,
-    activeEmployeeId
+    dbError
   ]);
 
   return (

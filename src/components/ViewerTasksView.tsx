@@ -21,18 +21,7 @@ interface ViewerTasksViewProps {
   onRejectTask?: (id: string, reason: string) => void;
   onPauseTask?: (id: string, reason: string) => void;
   onResumeTask?: (id: string) => void;
-  onCompleteTask?: (
-    id: string, 
-    endTime: string, 
-    delayReason?: string, 
-    operationDetails?: string,
-    consumedMaterials?: any[],
-    paymentInfo?: {
-      paymentStatus: 'collected' | 'free';
-      collectedAmount?: number;
-      paymentNotes?: string;
-    }
-  ) => void;
+  onCompleteTask?: (id: string, endTime: string, delayReason?: string, operationDetails?: string) => void;
   onRequestReopenTask?: (id: string, reason: string, taskType?: string) => void;
   onApproveReopenTask?: (id: string) => void;
   onRejectReopenTask?: (id: string, reason?: string) => void;

@@ -113,20 +113,6 @@ export interface Task {
   delayApproved?: boolean; // Whether manager/supervisor approved reason (cancels deduction)
   delayApprovedBy?: string; // Name of supervisor/manager who approved or rejected
   delayApprovedAt?: string; // ISO timestamp of decision
-  // Inventory / Materials Consumed for Subscriber
-  consumedMaterials?: ConsumedMaterial[];
-  // Subscriber Payment Collection (تحصيل أموال من المشترك)
-  paymentStatus?: 'collected' | 'free'; // 'collected' = تم تحصيل مبلغ, 'free' = مجاناً بدون تحصيل
-  collectedAmount?: number; // المبلغ المحصل بالدينار
-  paymentNotes?: string; // تفاصيل أو سبب التحصيل (أجور صيانة، تنصيب، مستلزمات...)
-  // Compatibility & optional UI aliases
-  title?: string;
-  isPaused?: boolean;
-  completedAt?: string;
-  previousPostponeReason?: string;
-  durationMinutes?: number;
-  activeWorkTimeMs?: number;
-  totalPausedTimeMs?: number;
 }
 
 export interface LeaderboardEntry {
@@ -198,7 +184,7 @@ export interface SystemUser {
   username: string;
   password?: string;
   displayName?: string;
-  role: 'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant';
+  role: 'owner' | 'supervisor' | 'manager' | 'technician';
   status: 'active' | 'disabled';
   createdAt?: string;
   lastDevice?: string;
@@ -319,7 +305,7 @@ export interface PayrollPeriod {
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   actualDays: number; // actual days count in cycle (e.g. 30, 31, 28)
-  status: 'open' | 'calculated' | 'closed' | 'archived' | string;
+  status: 'open' | 'calculated' | 'closed' | 'archived';
   createdAt: string; // ISO string
   closedAt?: string; // ISO string
   closedBy?: string;
@@ -444,64 +430,8 @@ export interface FinancialAdjustment {
   notes?: string;
   createdById?: string;
   createdBy?: string;
-  createdByName?: string;
   createdAt: string; // ISO string
 }
-
-// ==========================================
-// Inventory & Materials Management Models
-// ==========================================
-
-export interface ConsumedMaterial {
-  materialId: string;
-  materialName: string;
-  unit: string;
-  quantity: number;
-  notes?: string;
-}
-
-export interface MaterialItem {
-  id: string;
-  name: string;
-  unit: string;
-  category?: string;
-  description?: string;
-  minAlertThreshold?: number;
-  warehouseStock?: number; // عدد القطع المتوفرة حالياً في المخزن الرئيسي
-  createdAt: string;
-}
-
-export interface TechnicianStockItem {
-  id: string; // composite `${employeeId}_${materialId}`
-  employeeId: string;
-  employeeName: string;
-  materialId: string;
-  materialName: string;
-  unit: string;
-  quantity: number;
-  lastUpdatedAt: string;
-}
-
-export interface MaterialTransaction {
-  id: string;
-  type: 'supply' | 'consumption' | 'return' | 'adjustment' | 'warehouse_in' | 'warehouse_out';
-  employeeId?: string;
-  employeeName?: string;
-  materialId: string;
-  materialName: string;
-  unit: string;
-  quantity: number;
-  previousQuantity?: number;
-  newQuantity?: number;
-  taskId?: string;
-  taskType?: string;
-  subscriberName?: string;
-  subscriberPhone?: string;
-  notes?: string;
-  performedBy: string;
-  createdAt: string; // ISO timestamp
-}
-
 
 
 

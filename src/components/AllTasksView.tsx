@@ -26,10 +26,7 @@ import {
   FileSpreadsheet,
   FileText,
   Printer,
-  ClipboardCheck,
-  Package,
-  Boxes,
-  Banknote
+  ClipboardCheck
 } from 'lucide-react';
 import { Task, Employee, DbTaskType } from '../types';
 import { 
@@ -53,7 +50,7 @@ interface AllTasksViewProps {
   tasks: Task[];
   employees: Employee[];
   taskTypes?: DbTaskType[];
-  userRole?: 'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant' | string;
+  userRole?: 'owner' | 'supervisor' | 'manager' | 'technician';
   onStartTask?: (
     employeeId: string,
     taskType: string,
@@ -881,23 +878,6 @@ export default function AllTasksView({
                                     {new Date(task.sentAt || task.startTime || task.assignedDate || Date.now()).toLocaleString('ar-IQ')}
                                   </span>
                                 </div>
-
-                                {/* 4. تحصيل أموال المشترك */}
-                                {task.status === 'completed' && (
-                                  <div className="flex items-center gap-1">
-                                    {task.paymentStatus === 'collected' || (task.collectedAmount && task.collectedAmount > 0) ? (
-                                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200/90 px-2 py-0.5 rounded-lg text-[10.5px] font-mono font-black shadow-2xs flex items-center gap-1">
-                                        <span>💰</span>
-                                        <span>{Number(task.collectedAmount || 0).toLocaleString('ar-EG')} د.ع</span>
-                                      </span>
-                                    ) : (
-                                      <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-lg text-[10.5px] font-bold flex items-center gap-1">
-                                        <span>🆓</span>
-                                        <span>مجاناً</span>
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
                               </div>
 
                               {/* Toggle Arrow / Button */}
@@ -978,49 +958,6 @@ export default function AllTasksView({
                                   </div>
                                 )}
 
-                                {/* Payment Collection info if completed */}
-                                {task.status === 'completed' && (task.paymentStatus || task.collectedAmount !== undefined) && (
-                                  <div className={`p-3 rounded-2xl border text-xs font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs ${
-                                    task.paymentStatus === 'collected' || (task.collectedAmount && task.collectedAmount > 0)
-                                      ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
-                                      : 'bg-blue-50/70 border-blue-200 text-blue-900'
-                                  }`}>
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
-                                        task.paymentStatus === 'collected' || (task.collectedAmount && task.collectedAmount > 0)
-                                          ? 'bg-emerald-600 text-white'
-                                          : 'bg-blue-200/80 text-blue-800'
-                                      }`}>
-                                        <Banknote className="w-4 h-4" />
-                                      </div>
-                                      <div>
-                                        <span className="font-black block">تحصيل أجور ومبالغ من المشترك:</span>
-                                        {task.paymentNotes ? (
-                                          <span className="text-[11px] text-slate-600 font-medium block">
-                                            السبب / الملاحظات: {task.paymentNotes}
-                                          </span>
-                                        ) : (
-                                          <span className="text-[11px] text-slate-500 font-medium block">
-                                            {task.paymentStatus === 'collected' ? 'تم استلام المبلغ نقداً من المشترك' : 'خدمة مجانية ضمن الاشتراك بدون أي أجور'}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div>
-                                      {task.paymentStatus === 'collected' || (task.collectedAmount && task.collectedAmount > 0) ? (
-                                        <span className="bg-emerald-600 text-white text-xs px-3 py-1 rounded-xl font-mono font-black shadow-2xs inline-block">
-                                          💰 تم التحصيل: {Number(task.collectedAmount || 0).toLocaleString('ar-EG')} د.ع
-                                        </span>
-                                      ) : (
-                                        <span className="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-xl font-black inline-block">
-                                          🆓 خدمة مجانية (بدون تحصيل)
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-
                                 {/* Rejection Reason with Tech Attribution if rejected */}
                                 {(task.rejectionReason || task.previousRejectionReason) && (
                                   <div className="bg-red-50 p-3 rounded-xl border border-red-200/90 text-xs space-y-1">
@@ -1073,27 +1010,6 @@ export default function AllTasksView({
                                         <span className="bg-white/80 p-2 rounded-lg border border-amber-100 text-slate-800 font-bold">
                                           {task.delayReason}
                                         </span>
-                                      </div>
-                                    )}
-
-                                    {/* Consumed Materials for Subscriber */}
-                                    {task.consumedMaterials && task.consumedMaterials.length > 0 && (
-                                      <div className="bg-blue-50/90 p-3 rounded-xl border border-blue-200/90 text-blue-950 font-bold text-[11px] space-y-1.5 mt-1.5">
-                                        <span className="text-blue-900 font-black flex items-center gap-1.5">
-                                          <Package className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                          <span>📦 المواد والمستلزمات المصروفة لهذا المشترك:</span>
-                                        </span>
-                                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                          {task.consumedMaterials.map((mat, idx) => (
-                                            <span
-                                              key={idx}
-                                              className="bg-white px-2.5 py-1 rounded-lg border border-blue-200 text-slate-800 font-extrabold text-[11px] shadow-2xs flex items-center gap-1"
-                                            >
-                                              <span className="text-blue-700">{mat.materialName}:</span>
-                                              <span className="font-mono text-emerald-700">{mat.quantity} {mat.unit}</span>
-                                            </span>
-                                          ))}
-                                        </div>
                                       </div>
                                     )}
                                   </div>

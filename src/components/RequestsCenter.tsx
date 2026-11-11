@@ -499,7 +499,7 @@ export default function RequestsCenter({
   };
 
   // Helper Badge Renderers
-  const renderStatusBadge = (status: 'pending' | 'approved' | 'rejected' | 'cancelled') => {
+  const renderStatusBadge = (status: 'pending' | 'approved' | 'rejected') => {
     switch (status) {
       case 'approved':
         return (
@@ -513,13 +513,6 @@ export default function RequestsCenter({
           <span className="bg-red-100 text-red-800 border border-red-200 text-[11px] font-black px-3 py-1 rounded-full flex items-center gap-1 w-fit">
             <XCircle className="w-3.5 h-3.5 text-red-600" />
             مرفوض
-          </span>
-        );
-      case 'cancelled':
-        return (
-          <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-black px-3 py-1 rounded-full flex items-center gap-1 w-fit">
-            <XCircle className="w-3.5 h-3.5 text-slate-500" />
-            ملغى
           </span>
         );
       case 'pending':

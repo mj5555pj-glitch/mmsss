@@ -12,7 +12,7 @@ interface UserManagementProps {
   onSaveUser: (user: SystemUser) => Promise<void>;
   onDeleteUser: (id: string) => Promise<void>;
   currentUsername: string;
-  userRole: 'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant';
+  userRole: 'owner' | 'supervisor' | 'manager' | 'technician';
   employees: Employee[];
   onSaveEmployee: (employee: Employee) => Promise<void>;
   
@@ -49,11 +49,11 @@ export default function UserManagement({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant'>('technician');
+  const [role, setRole] = useState<'owner' | 'supervisor' | 'manager' | 'technician'>('technician');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [status, setStatus] = useState<'active' | 'disabled'>('active');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant'>('technician');
+  const [newRole, setNewRole] = useState<'owner' | 'supervisor' | 'manager' | 'technician'>('technician');
 
   // Alert message states
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -326,7 +326,7 @@ export default function UserManagement({
 
 
 
-  const getRoleBadge = (r: 'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant') => {
+  const getRoleBadge = (r: 'owner' | 'supervisor' | 'manager' | 'technician') => {
     switch (r) {
       case 'owner':
         return (
@@ -343,15 +343,7 @@ export default function UserManagement({
             المشرف (Supervisor)
           </span>
         );
-      case 'accountant':
-        return (
-          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-bold px-2.5 py-1 rounded-full text-[10px]">
-            <UserCheck className="w-3 h-3 text-emerald-600" />
-            المحاسب (Accountant)
-          </span>
-        );
       case 'technician':
-      default:
         return (
           <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 font-bold px-2.5 py-1 rounded-full text-[10px]">
             <User className="w-3 h-3 text-slate-500" />

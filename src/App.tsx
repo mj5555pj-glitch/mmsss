@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, Trophy, FileText, Info, Award, CircleHelp, Settings, LogOut, Clock, Zap, FolderKanban, Database, UserCheck, Inbox, DollarSign, History, ShieldCheck, ClipboardList, Calendar, Boxes, Package } from 'lucide-react';
-import { Employee, EmployeeStatus, Task, TaskType, TASK_POINTS, DbTaskType, PointsRules, ManualPointsRecord, SystemUser, AttendanceRecord, CompanySettings, ConsumedMaterial } from './types';
+import { LayoutDashboard, Users, Trophy, FileText, Info, Award, CircleHelp, Settings, LogOut, Clock, Zap, FolderKanban, Database, UserCheck, Inbox, DollarSign, History, ShieldCheck, ClipboardList, Calendar } from 'lucide-react';
+import { Employee, EmployeeStatus, Task, TaskType, TASK_POINTS, DbTaskType, PointsRules, ManualPointsRecord, SystemUser, AttendanceRecord, CompanySettings } from './types';
 import { SEED_EMPLOYEES, SEED_TASKS } from './data';
 import { isToday, calculateTaskPoints, getTaskTimeLimitMinutes, safeGetLocalStorage, safeSetLocalStorage, safeRemoveLocalStorage, canAssignTaskToTechnician, normalizeDateString } from './utils';
 import { 
   initCollectionsIfEmpty,
   subscribeEmployees,
   subscribeTasks,
-  getTasks,
   subscribeSettings,
   subscribeCompanySettings,
   subscribeAttendanceRecords,
-  getAttendanceRecords,
   saveEmployee,
   deleteEmployee,
   saveTask,
@@ -32,8 +30,7 @@ import {
   subscribeUsers,
   saveUser,
   deleteUser,
-  updateUserLoginMetadata,
-  consumeMaterialsForTask
+  updateUserLoginMetadata
 } from './lib/dbService';
 import { triggerWebNotification, requestNotificationPermission, unlockAudioForSafari } from './lib/notificationService';
 import { 
@@ -74,12 +71,10 @@ import SystemDiagnostics from './components/SystemDiagnostics';
 import TechnicianCycleHistoryCard from './components/TechnicianCycleHistoryCard';
 import TechnicianPointsView from './components/TechnicianPointsView';
 import TechnicianPayrollView from './components/TechnicianPayrollView';
-import InventoryManagementView from './components/InventoryManagementView';
-import TechnicianInventoryView from './components/TechnicianInventoryView';
 
 export default function App() {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'task_management' | 'production_readiness' | 'system_diagnostics' | 'hr_settings' | 'payroll_management' | 'requests_center' | 'attendance_management' | 'active_tasks' | 'all_tasks' | 'employees' | 'leaderboard' | 'reports' | 'settings' | 'about' | 'tasks' | 'achievements' | 'employee_hr_center' | 'cycle_history' | 'points' | 'payroll' | 'inventory'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'task_management' | 'production_readiness' | 'system_diagnostics' | 'hr_settings' | 'payroll_management' | 'requests_center' | 'attendance_management' | 'active_tasks' | 'all_tasks' | 'employees' | 'leaderboard' | 'reports' | 'settings' | 'about' | 'tasks' | 'achievements' | 'employee_hr_center' | 'cycle_history' | 'points' | 'payroll'>('dashboard');
   const [selectedEmployeeForTask, setSelectedEmployeeForTask] = useState<string | undefined>(undefined);
 
   const handleNavigateTab = (tab: string, employeeId?: string) => {
@@ -123,9 +118,9 @@ export default function App() {
     return safeGetLocalStorage('futurex_is_logged_in') === 'true';
   });
 
-  const [userRole, setUserRole] = useState<'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant'>(() => {
+  const [userRole, setUserRole] = useState<'owner' | 'supervisor' | 'manager' | 'technician'>(() => {
     const saved = safeGetLocalStorage('futurex_user_role');
-    return (saved as 'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant') || 'technician';
+    return (saved as 'owner' | 'supervisor' | 'manager' | 'technician') || 'technician';
   });
 
   const [users, setUsers] = useState<SystemUser[]>([]);
@@ -164,7 +159,7 @@ export default function App() {
     };
   }, []);
 
-  // Load data and set up real-time Firebase subscriptions with role-based filtering and listener cleanup
+  // Load data and set up real-time Firebase subscriptions
   useEffect(() => {
     let isMounted = true;
     let unsubscribeEmployees: () => void;
@@ -175,11 +170,6 @@ export default function App() {
     let unsubscribeUsers: () => void;
     let unsubscribeCompanySettings: () => void;
     let unsubscribeAttendanceRecords: () => void;
-
-    const currentEmpId = safeGetLocalStorage('futurex_logged_in_employee_id');
-    const isTech = userRole === 'technician';
-    const targetEmployeeId = isTech ? (currentEmpId || undefined) : undefined;
-    const isPrivileged = userRole === 'owner' || userRole === 'manager';
 
     async function setupFirebase() {
       try {
@@ -217,72 +207,37 @@ export default function App() {
           }
         );
 
-        // 1. Large collections (Tasks & Attendance):
-        // For technicians: keep real-time listener strictly filtered to personal employeeId (limit 50).
-        // For Owner / Manager: Convert to on-demand getDocs (limit 50) instead of continuous real-time onSnapshot!
-        if (isTech && targetEmployeeId) {
-          unsubscribeTasks = subscribeTasks(
-            (ts) => {
-              if (!isMounted) return;
-              prevTasksRef.current = ts;
-              setTasks(ts);
-            },
-            (err) => {
-              if (!isMounted) return;
-              console.warn('Tasks subscription notice:', err);
-              const isOffline = (err as any)?.code === 'unavailable' || String(err).includes('unavailable');
-              if (!isOffline && tasks.length === 0) {
-                setDbError('فشل تحميل المهام من قاعدة البيانات.');
-              }
-            },
-            targetEmployeeId
-          );
-
-          unsubscribeAttendanceRecords = subscribeAttendanceRecords(
-            (recs) => {
-              if (!isMounted) return;
-              setAttendanceRecords(recs);
-            },
-            (err) => console.error('Attendance records sub error:', err),
-            targetEmployeeId
-          );
-        } else {
-          // On-demand fetch with strict limit 50 for Owner / Manager to reduce Firestore read costs
-          getTasks(false, 50).then((ts) => {
+        unsubscribeTasks = subscribeTasks(
+          (ts) => {
             if (!isMounted) return;
+
             prevTasksRef.current = ts;
             setTasks(ts);
-          }).catch((err) => {
-            console.warn('On-demand getTasks notice:', err);
-          });
-
-          getAttendanceRecords(false, undefined, 50).then((recs) => {
+          },
+          (err) => {
             if (!isMounted) return;
-            setAttendanceRecords(recs);
-          }).catch((err) => {
-            console.warn('On-demand getAttendanceRecords notice:', err);
-          });
-        }
-
-        // 2. Settings & Credentials: Pruned for background screens
-        // Only active when the Owner/Manager is in settings screens; otherwise closed to prevent unnecessary reads
-        const isSettingsScreen = activeTab === 'settings' || activeTab === 'hr_settings';
-        if (isPrivileged && isSettingsScreen) {
-          unsubscribeSettings = subscribeSettings(
-            (creds) => {
-              if (!isMounted) return;
-              if (creds) {
-                if (creds.adminUsername) setAdminUsername(creds.adminUsername);
-                if (creds.adminPassword) setAdminPassword(creds.adminPassword);
-                if (creds.viewerUsername) setViewerUsername(creds.viewerUsername);
-                if (creds.viewerPassword) setViewerPassword(creds.viewerPassword);
-              }
-            },
-            (err) => {
-              console.error(err);
+            console.warn('Tasks subscription notice:', err);
+            const isOffline = (err as any)?.code === 'unavailable' || String(err).includes('unavailable');
+            if (!isOffline && tasks.length === 0) {
+              setDbError('فشل تحميل المهام من قاعدة البيانات.');
             }
-          );
-        }
+          }
+        );
+
+        unsubscribeSettings = subscribeSettings(
+          (creds) => {
+            if (!isMounted) return;
+            if (creds) {
+              if (creds.adminUsername) setAdminUsername(creds.adminUsername);
+              if (creds.adminPassword) setAdminPassword(creds.adminPassword);
+              if (creds.viewerUsername) setViewerUsername(creds.viewerUsername);
+              if (creds.viewerPassword) setViewerPassword(creds.viewerPassword);
+            }
+          },
+          (err) => {
+            console.error(err);
+          }
+        );
 
         unsubscribeTaskTypes = subscribeTaskTypes(
           (typesList) => {
@@ -304,20 +259,15 @@ export default function App() {
           }
         );
 
-        // 3. Users: Pruned for background screens
-        // Only active when the Owner/Manager is in user/HR settings screens; otherwise closed
-        const isUsersScreen = activeTab === 'settings' || activeTab === 'employee_hr_center' || (activeTab as string) === 'users';
-        if (isPrivileged && isUsersScreen) {
-          unsubscribeUsers = subscribeUsers(
-            (usersList) => {
-              if (!isMounted) return;
-              setUsers(usersList);
-            },
-            (err) => {
-              console.error('Error fetching users:', err);
-            }
-          );
-        }
+        unsubscribeUsers = subscribeUsers(
+          (usersList) => {
+            if (!isMounted) return;
+            setUsers(usersList);
+          },
+          (err) => {
+            console.error('Error fetching users:', err);
+          }
+        );
 
         unsubscribeCompanySettings = subscribeCompanySettings(
           (sets) => {
@@ -325,6 +275,14 @@ export default function App() {
             if (sets) setCompanySettings(sets);
           },
           (err) => console.error('Company settings sub error:', err)
+        );
+
+        unsubscribeAttendanceRecords = subscribeAttendanceRecords(
+          (recs) => {
+            if (!isMounted) return;
+            setAttendanceRecords(recs);
+          },
+          (err) => console.error('Attendance records sub error:', err)
         );
 
         // If the component unmounted while we were establishing subscriptions, unsubscribe them immediately
@@ -346,15 +304,10 @@ export default function App() {
       }
     }
 
-    const safetyLoadingTimer = setTimeout(() => {
-      if (isMounted) setLoading(false);
-    }, 2500);
-
     setupFirebase();
 
     return () => {
       isMounted = false;
-      clearTimeout(safetyLoadingTimer);
       if (unsubscribeEmployees) unsubscribeEmployees();
       if (unsubscribeTasks) unsubscribeTasks();
       if (unsubscribeSettings) unsubscribeSettings();
@@ -364,7 +317,7 @@ export default function App() {
       if (unsubscribeCompanySettings) unsubscribeCompanySettings();
       if (unsubscribeAttendanceRecords) unsubscribeAttendanceRecords();
     };
-  }, [userRole, isLoggedIn, activeTab]);
+  }, []);
 
   // Real-time account status checker for security
   useEffect(() => {
@@ -835,18 +788,7 @@ export default function App() {
     ).catch(err => console.warn('OneSignal reject task push warning:', err));
   };
 
-  const handleCompleteTask = async (
-    id: string, 
-    endTime: string, 
-    delayReason?: string, 
-    operationDetails?: string,
-    consumedMaterials?: ConsumedMaterial[],
-    paymentInfo?: {
-      paymentStatus: 'collected' | 'free';
-      collectedAmount?: number;
-      paymentNotes?: string;
-    }
-  ) => {
+  const handleCompleteTask = async (id: string, endTime: string, delayReason?: string, operationDetails?: string) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
 
@@ -915,22 +857,6 @@ export default function App() {
       updatedNotes = task.notes ? `${task.notes}\n[معلومات العملية]: ${operationDetails}` : `معلومات العملية: ${operationDetails}`;
     }
 
-    const paymentStatus = paymentInfo?.paymentStatus || 'free';
-    const collectedAmount = paymentStatus === 'collected' ? Math.max(0, Number(paymentInfo?.collectedAmount || 0)) : 0;
-    const paymentNotes = paymentInfo?.paymentNotes?.trim() || undefined;
-
-    if (paymentStatus === 'collected' && collectedAmount > 0) {
-      const paymentSummary = `[التحصيل المالي]: تم تحصيل ${collectedAmount.toLocaleString('ar-EG')} د.ع${paymentNotes ? ` (${paymentNotes})` : ''}`;
-      if (!updatedNotes || !updatedNotes.includes('[التحصيل المالي]')) {
-        updatedNotes = updatedNotes ? `${updatedNotes}\n${paymentSummary}` : paymentSummary;
-      }
-    } else if (paymentStatus === 'free') {
-      const freeSummary = `[التحصيل المالي]: مجاناً (بدون تحصيل مالي)`;
-      if (!updatedNotes || !updatedNotes.includes('[التحصيل المالي]')) {
-        updatedNotes = updatedNotes ? `${updatedNotes}\n${freeSummary}` : freeSummary;
-      }
-    }
-
     const completedTask: Task = {
       ...task,
       endTime,
@@ -946,32 +872,10 @@ export default function App() {
       delayStatus: (isOverdue && finalDelayReason && !task.delayApproved) ? 'pending' : task.delayStatus,
       delayApproved: task.delayApproved || false,
       operationDetails: finalOperationDetails,
-      notes: updatedNotes,
-      consumedMaterials: consumedMaterials && consumedMaterials.length > 0 ? consumedMaterials : task.consumedMaterials,
-      paymentStatus,
-      collectedAmount,
-      paymentNotes
+      notes: updatedNotes
     };
 
     await saveTask(completedTask);
-
-    // If materials were consumed for this subscriber/task, deduct from technician inventory and log transactions!
-    if (consumedMaterials && consumedMaterials.length > 0) {
-      try {
-        await consumeMaterialsForTask({
-          taskId: completedTask.id,
-          taskType: completedTask.taskType,
-          employeeId: completedTask.employeeId,
-          employeeName: completedTask.employeeName,
-          subscriberName: completedTask.subscriberName,
-          subscriberPhone: completedTask.subscriberPhone,
-          items: consumedMaterials,
-          performedBy: currentUsername || completedTask.employeeName
-        });
-      } catch (matErr) {
-        console.warn('Material consumption error on task completion:', matErr);
-      }
-    }
 
     const finalizedSupporters: Task[] = [];
     for (const sup of completedSupporterTasks) {
@@ -1730,7 +1634,6 @@ export default function App() {
     if (userRole === 'technician') {
       return [
         { id: 'tasks' as const, label: 'المهام', icon: Clock },
-        { id: 'inventory' as const, label: 'مخزوني والعهدة', icon: Boxes },
         { id: 'points' as const, label: 'النقاط', icon: Award },
         { id: 'payroll' as const, label: 'الراتب', icon: DollarSign },
       ];
@@ -1739,7 +1642,6 @@ export default function App() {
       return [
         { id: 'dashboard' as const, label: 'الرئيسية', icon: LayoutDashboard },
         { id: 'task_management' as const, label: 'إدارة المهام', icon: ClipboardList },
-        { id: 'inventory' as const, label: 'المخزون والعهد', icon: Boxes },
         { id: 'reports' as const, label: 'التقارير', icon: FileText },
         { id: 'settings' as const, label: 'الإعدادات', icon: Settings },
         { id: 'about' as const, label: 'عن النظام', icon: Info },
@@ -1749,7 +1651,6 @@ export default function App() {
       return [
         { id: 'dashboard' as const, label: 'الرئيسية', icon: LayoutDashboard },
         { id: 'task_management' as const, label: 'إدارة المهام', icon: ClipboardList },
-        { id: 'inventory' as const, label: 'المخزون والعهد', icon: Boxes },
         { id: 'reports' as const, label: 'التقارير', icon: FileText },
         { id: 'employee_hr_center' as const, label: 'الموارد البشرية HR', icon: Users },
         { id: 'about' as const, label: 'عن النظام', icon: Info },
@@ -1759,7 +1660,6 @@ export default function App() {
     return [
       { id: 'dashboard' as const, label: 'الرئيسية', icon: LayoutDashboard },
       { id: 'task_management' as const, label: 'إدارة المهام', icon: ClipboardList },
-      { id: 'inventory' as const, label: 'المخزون والعهد', icon: Boxes },
       { id: 'reports' as const, label: 'التقارير', icon: FileText },
       { id: 'employee_hr_center' as const, label: 'الموارد البشرية HR', icon: Users },
       { id: 'settings' as const, label: 'الإعدادات', icon: Settings },
@@ -1769,7 +1669,7 @@ export default function App() {
 
   // Ensure unauthorized roles cannot access restricted tabs
   useEffect(() => {
-    if (userRole === 'technician' && activeTab !== 'tasks' && activeTab !== 'inventory' && activeTab !== 'points' && activeTab !== 'payroll' && activeTab !== 'cycle_history' && activeTab !== 'about' && activeTab !== 'dashboard') {
+    if (userRole === 'technician' && activeTab !== 'tasks' && activeTab !== 'points' && activeTab !== 'payroll' && activeTab !== 'cycle_history' && activeTab !== 'about' && activeTab !== 'dashboard') {
       setActiveTab('dashboard');
     }
     if (userRole === 'supervisor' && activeTab === 'employee_hr_center') {
@@ -1894,21 +1794,6 @@ export default function App() {
               tasks={tasks}
               manualPoints={manualPoints}
               allEmployees={employees}
-            />
-          )}
-
-          {activeTab === 'inventory' && userRole === 'technician' && (
-            <TechnicianInventoryView
-              employee={employees.find(emp => emp.id === (safeGetLocalStorage('futurex_logged_in_employee_id') || '')) || employees[0]}
-            />
-          )}
-
-          {activeTab === 'inventory' && (userRole === 'owner' || userRole === 'supervisor' || userRole === 'manager' || userRole === 'accountant') && (
-            <InventoryManagementView
-              employees={employees}
-              userRole={userRole}
-              currentUsername={currentUsername}
-              onNavigateTab={handleNavigateTab}
             />
           )}
 

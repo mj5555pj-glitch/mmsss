@@ -97,15 +97,6 @@ class DiagnosticsStore {
     );
   }
 
-  public unregisterListener(collection: string, source: string = 'SubscriptionManager') {
-    this.listenerMetrics.delete(collection);
-    console.log(
-      `%c[Firestore LISTENER CLOSED]%c\ncollection=${collection}\nsource=${source}\nstatus=closed and released to prevent reads`,
-      'color: #6B7280; font-weight: bold;',
-      'color: inherit;'
-    );
-  }
-
   public logListenerEvent(collection: string, documentsReceived: number) {
     this.totalRealTimeDocs += documentsReceived;
     const listener = this.listenerMetrics.get(collection);

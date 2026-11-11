@@ -101,7 +101,7 @@ export default function ReportsView({
   const [editTotalPausedMs, setEditTotalPausedMs] = useState(0);
   const [editPauseReason, setEditPauseReason] = useState('');
   const [editPoints, setEditPoints] = useState(0);
-  const [editStatus, setEditStatus] = useState<'active' | 'paused' | 'completed' | 'pending' | 'rejected' | 'postponed'>('completed');
+  const [editStatus, setEditStatus] = useState<'active' | 'paused' | 'completed'>('completed');
   const [editAssignedDate, setEditAssignedDate] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [editSubscriberName, setEditSubscriberName] = useState('');

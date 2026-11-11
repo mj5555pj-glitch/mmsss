@@ -108,7 +108,7 @@ export default function AttendanceManagement({ employees, userRole }: Attendance
   // Modal form fields
   const [formCheckIn, setFormCheckIn] = useState('');
   const [formCheckOut, setFormCheckOut] = useState('');
-  const [formStatus, setFormStatus] = useState<'present' | 'late' | 'absent' | 'leave_paid' | 'leave_unpaid' | 'holiday' | 'waiting_for_check_in' | 'not_recorded'>('present');
+  const [formStatus, setFormStatus] = useState<'present' | 'late' | 'absent' | 'leave_paid' | 'leave_unpaid' | 'waiting_for_check_in' | 'not_recorded'>('present');
   const [formReason, setFormReason] = useState('');
 
   // Status message state
