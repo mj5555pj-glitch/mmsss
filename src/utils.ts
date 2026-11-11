@@ -817,10 +817,10 @@ export function getEffectiveWorkDateStr(now: Date = new Date()): string {
 export function canAssignTaskToTechnician(
   employeeId: string,
   employees: Employee[],
-  attendanceRecords: AttendanceRecord[],
-  companySettings?: CompanySettings | null
+  _attendanceRecords?: AttendanceRecord[],
+  _companySettings?: CompanySettings | null
 ): { allowed: boolean; errorMessage?: string } {
-  // Check employee status & exemption
+  // Check employee status
   const emp = employees.find((e) => e.id === employeeId);
   if (emp && (emp.status === 'suspended' || emp.status === 'terminated')) {
     return {
@@ -834,31 +834,6 @@ export function canAssignTaskToTechnician(
     return {
       allowed: false,
       errorMessage: 'لا يمكن إرسال أو إسناد المهام إلا للموظفين المصنفين بوظيفة (فني). الموظفون الإداريون والمدراء لا تسند لهم مهام.',
-    };
-  }
-
-  // Exempt technicians can always be assigned tasks without fingerprint check-in
-  if (emp && (emp.isExemptFromFingerprint || emp.exemptFromFingerprint)) {
-    return { allowed: true };
-  }
-
-  // If setting is explicitly disabled (preventTaskWithoutCheckIn === false), allow assignment without check
-  const isSettingEnabled = companySettings?.preventTaskWithoutCheckIn !== false;
-  if (!isSettingEnabled) {
-    return { allowed: true };
-  }
-
-  // Find today's attendance record for this technician
-  const todayStr = getEffectiveWorkDateStr();
-  const todayRecord = attendanceRecords.find(
-    (r) => r.employeeId === employeeId && r.date === todayStr && !r.isDeleted
-  );
-
-  // If no record exists, or if status is NOT 'present' and NOT 'late' (e.g. waiting_for_check_in, not_recorded, absent, etc.)
-  if (!todayRecord || (todayRecord.status !== 'present' && todayRecord.status !== 'late')) {
-    return {
-      allowed: false,
-      errorMessage: 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.',
     };
   }
 

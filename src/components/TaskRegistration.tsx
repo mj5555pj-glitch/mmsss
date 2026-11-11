@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Play, CheckCircle2, Clock, Calendar, PlusCircle, AlertCircle, Trash2, Pencil, Search, Star, MapPin, User, Tag, ArrowUpDown, ShieldAlert, Check, ChevronDown, Phone, History, RotateCcw, X, FileText, AlertTriangle, Plus, Send } from 'lucide-react';
 import { Employee, Task, TaskType, TASK_POINTS, DbTaskType, PointsRules, AttendanceRecord, CompanySettings } from '../types';
 import { toLocalInputString, formatDuration, formatMsToHMS, formatArabicDateOnly, formatArabicTimeOnly, calculateTaskPoints, isTechnicianEmployee, canAssignTaskToTechnician } from '../utils';
-import { subscribeCompanySettings, subscribeAttendanceRecords, findSubscriberOrEmployeeByPhone } from '../lib/dbService';
+import { subscribeCompanySettings, findSubscriberOrEmployeeByPhone } from '../lib/dbService';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface TaskRegistrationProps {
@@ -67,21 +67,16 @@ export default function TaskRegistration({
   const [showTaskTypeDropdown, setShowTaskTypeDropdown] = useState(false);
   const [supportTaskId, setSupportTaskId] = useState('');
 
-  // Attendance and Settings subscriptions for task assignment rules
+  // Settings subscription for task assignment rules
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
 
   useEffect(() => {
     const unsubSettings = subscribeCompanySettings((sets) => {
       if (sets) setCompanySettings(sets);
     }, () => {});
-    const unsubAttendance = subscribeAttendanceRecords((recs) => {
-      setAttendanceRecords(recs);
-    }, () => {});
 
     return () => {
       unsubSettings();
-      unsubAttendance();
     };
   }, []);
 
@@ -352,9 +347,9 @@ export default function TaskRegistration({
       return;
     }
 
-    const checkResult = canAssignTaskToTechnician(employeeId, employees, attendanceRecords, companySettings);
+    const checkResult = canAssignTaskToTechnician(employeeId, employees);
     if (!checkResult.allowed) {
-      setError(checkResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.');
+      setError(checkResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني حالياً.');
       return;
     }
 
@@ -385,9 +380,9 @@ export default function TaskRegistration({
       return;
     }
 
-    const quickCheckResult = canAssignTaskToTechnician(quickTechId, employees, attendanceRecords, companySettings);
+    const quickCheckResult = canAssignTaskToTechnician(quickTechId, employees);
     if (!quickCheckResult.allowed) {
-      setQuickError(quickCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.');
+      setQuickError(quickCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني حالياً.');
       return;
     }
     if (!quickTaskType) {
@@ -436,9 +431,9 @@ export default function TaskRegistration({
       return;
     }
 
-    const resendCheckResult = canAssignTaskToTechnician(resendTechId, employees, attendanceRecords, companySettings);
+    const resendCheckResult = canAssignTaskToTechnician(resendTechId, employees);
     if (!resendCheckResult.allowed) {
-      setResendError(resendCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.');
+      setResendError(resendCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني حالياً.');
       return;
     }
 
@@ -572,9 +567,9 @@ export default function TaskRegistration({
       setError('يرجى تحديد الموظف أولاً.');
       return;
     }
-    const forceCheckResult = canAssignTaskToTechnician(employeeId, employees, attendanceRecords, companySettings);
+    const forceCheckResult = canAssignTaskToTechnician(employeeId, employees);
     if (!forceCheckResult.allowed) {
-      setError(forceCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.');
+      setError(forceCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني حالياً.');
       return;
     }
     setStartConfirmTime(new Date().toISOString());
@@ -582,9 +577,9 @@ export default function TaskRegistration({
   };
 
   const handleConfirmStartTask = () => {
-    const confirmCheckResult = canAssignTaskToTechnician(employeeId, employees, attendanceRecords, companySettings);
+    const confirmCheckResult = canAssignTaskToTechnician(employeeId, employees);
     if (!confirmCheckResult.allowed) {
-      setError(confirmCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.');
+      setError(confirmCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني حالياً.');
       setShowStartConfirm(false);
       return;
     }
@@ -646,9 +641,9 @@ export default function TaskRegistration({
       return;
     }
 
-    const completedCheckResult = canAssignTaskToTechnician(completedEmployeeId, employees, attendanceRecords, companySettings);
+    const completedCheckResult = canAssignTaskToTechnician(completedEmployeeId, employees);
     if (!completedCheckResult.allowed) {
-      setCompletedDialogError(completedCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.');
+      setCompletedDialogError(completedCheckResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني حالياً.');
       return;
     }
 
@@ -1049,8 +1044,7 @@ export default function TaskRegistration({
                           {matchedPhoneTask.status === 'completed' ? '🔵 مكتملة' :
                            matchedPhoneTask.status === 'active' ? '🟢 جارية' :
                            matchedPhoneTask.status === 'rejected' ? '🔴 مرفوضة' :
-                           matchedPhoneTask.status === 'paused' ? '⏸️ موقوفة' :
-                           matchedPhoneTask.status === 'postponed' ? '🟣 مؤجلة' : '⏳ قيد الانتظار'}
+                           matchedPhoneTask.status === 'paused' ? '⏸️ موقوفة' : '⏳ قيد الانتظار'}
                         </span>
                       </div>
                     )}

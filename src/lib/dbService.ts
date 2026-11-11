@@ -9,7 +9,8 @@ import {
   updateDoc,
   writeBatch,
   query,
-  where
+  where,
+  limit
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { 
@@ -28,7 +29,11 @@ import {
   PayrollRecord,
   AuditLogEntry,
   CompanySettings,
-  FinancialAdjustment
+  FinancialAdjustment,
+  ConsumedMaterial,
+  MaterialItem,
+  TechnicianStockItem,
+  MaterialTransaction
 } from '../types';
 import { SEED_EMPLOYEES, SEED_TASKS } from '../data';
 import { isToday, isThisWeek, isThisMonth } from '../utils';
@@ -247,6 +252,112 @@ export const PAYROLL_PERIODS_COLLECTION = 'payroll_periods';
 export const PAYROLL_RECORDS_COLLECTION = 'payroll_records';
 export const AUDIT_LOGS_COLLECTION = 'audit_logs';
 export const FINANCIAL_ADJUSTMENTS_COLLECTION = 'financial_adjustments';
+export const MATERIAL_ITEMS_COLLECTION = 'material_items';
+export const TECHNICIAN_INVENTORY_COLLECTION = 'technician_inventory';
+export const MATERIAL_TRANSACTIONS_COLLECTION = 'material_transactions';
+
+export const DEFAULT_MATERIAL_ITEMS: MaterialItem[] = [
+  {
+    id: 'mat-1',
+    name: 'راوتر واي فاي (Router Wi-Fi)',
+    unit: 'قطعة',
+    category: 'أجهزة',
+    description: 'راوتر منزلي لاسلكي ثنائي الحزمة',
+    minAlertThreshold: 5,
+    warehouseStock: 40,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-2',
+    name: 'أونيو ضوئي (ONU / ONT)',
+    unit: 'قطعة',
+    category: 'أجهزة',
+    description: 'جهاز تحويل الإشارة الضوئية للمشترك',
+    minAlertThreshold: 5,
+    warehouseStock: 60,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-3',
+    name: 'كابل ألياف خارجي (Drop Cable FTTH)',
+    unit: 'متر',
+    category: 'كوابل',
+    description: 'كابل فايبر خارجي مع سلك دعم فولاذي',
+    minAlertThreshold: 200,
+    warehouseStock: 2500,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-4',
+    name: 'كابل شبكة داخلي (UTP Cat6)',
+    unit: 'متر',
+    category: 'كوابل',
+    description: 'سلك شبكة نحاسي داخلي عالي السرعة',
+    minAlertThreshold: 100,
+    warehouseStock: 1200,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-5',
+    name: 'فاست كونكتر ألياف (Fast Connector SC)',
+    unit: 'قطعة',
+    category: 'ملحقات وتوصيلات',
+    description: 'كونكتر ضوئي سريع SC/UPC',
+    minAlertThreshold: 30,
+    warehouseStock: 350,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-6',
+    name: 'قسام ضوئي سبلتر (Optical Splitter)',
+    unit: 'قطعة',
+    category: 'ملحقات وتوصيلات',
+    description: 'سبلتر توزيع إشارة ضوئية',
+    minAlertThreshold: 10,
+    warehouseStock: 50,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-7',
+    name: 'بكسية خارجية / روزتة (FAT / Box)',
+    unit: 'قطعة',
+    category: 'ملحقات وتوصيلات',
+    description: 'صندوق حماية نهايات الألياف',
+    minAlertThreshold: 10,
+    warehouseStock: 35,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-8',
+    name: 'فيش شبكة (RJ-45 Plug)',
+    unit: 'قطعة',
+    category: 'ملحقات وتوصيلات',
+    description: 'رؤوس توصيل كابلات الشبكة UTP',
+    minAlertThreshold: 50,
+    warehouseStock: 300,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-9',
+    name: 'باج كورد ضوئي (Patch Cord SC)',
+    unit: 'قطعة',
+    category: 'ملحقات وتوصيلات',
+    description: 'سلك توصيل بصري جاهز 1-2 متر',
+    minAlertThreshold: 15,
+    warehouseStock: 80,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'mat-10',
+    name: 'محول طاقة / شاحن 12V (Adapter)',
+    unit: 'قطعة',
+    category: 'أجهزة',
+    description: 'شاحن طاقة للأجهزة والمودمات',
+    minAlertThreshold: 10,
+    warehouseStock: 45,
+    createdAt: new Date().toISOString()
+  }
+];
 
 // Calculate rankings on the fly
 export function calculateRankings(
@@ -332,8 +443,9 @@ export function calculateRankings(
 }
 
 // Subscription Multiplexing Manager
-// Ensures that only ONE single onSnapshot listener is open to Firestore per collection/document,
+// Ensures that only ONE single onSnapshot listener is open to Firestore per query/collection/document,
 // and multiplexes events in-memory to all active components with local cache first.
+// When all listeners unsubscribe, it closes the underlying Firestore listener immediately to prevent unnecessary reads.
 class SubscriptionManager<T> {
   private path: string;
   private isDoc: boolean;
@@ -344,12 +456,23 @@ class SubscriptionManager<T> {
   private cachedData: T | null = null;
   private hasLoaded: boolean = false;
   private cacheStorageKey?: string;
+  private queryFactory?: () => any;
+  private tag?: string;
 
-  constructor(path: string, isDoc: boolean, transform: (snapshot: any) => T, cacheStorageKey?: string) {
+  constructor(
+    path: string, 
+    isDoc: boolean, 
+    transform: (snapshot: any) => T, 
+    cacheStorageKey?: string,
+    queryFactory?: () => any,
+    tag?: string
+  ) {
     this.path = path;
     this.isDoc = isDoc;
     this.transform = transform;
     this.cacheStorageKey = cacheStorageKey;
+    this.queryFactory = queryFactory;
+    this.tag = tag;
 
     if (cacheStorageKey) {
       try {
@@ -371,7 +494,7 @@ class SubscriptionManager<T> {
     // Immediately emit cached memory/IndexedDB data if already loaded
     if (this.hasLoaded && this.cachedData !== null) {
       try {
-        diagnostics.logCacheHit(this.path, 'SubscriptionManager.subscribe (Immediate Cache Hit)');
+        diagnostics.logCacheHit(this.path, `SubscriptionManager.subscribe (Immediate Cache Hit${this.tag ? ` [${this.tag}]` : ''})`);
         onUpdate(this.cachedData);
       } catch (err) {
         console.error(`Error in immediate subscriber callback for ${this.path}:`, err);
@@ -388,19 +511,51 @@ class SubscriptionManager<T> {
       if (onError) {
         this.errorListeners.delete(onError);
       }
+
+      // CRITICAL FOR READ CONSUMPTION: When all components have unsubscribed,
+      // close the Firestore onSnapshot stream immediately to prevent runaway background reads!
+      if (this.listeners.size === 0 && this.activeUnsub) {
+        try {
+          this.activeUnsub();
+        } catch (err) {
+          console.warn(`Error unsubscribing Firestore listener for ${this.path}:`, err);
+        }
+        this.activeUnsub = null;
+        const listenerTag = this.tag ? `${this.path} [${this.tag}]` : this.path;
+        diagnostics.unregisterListener(listenerTag, 'SubscriptionManager');
+      }
     };
   }
 
+  public close() {
+    this.listeners.clear();
+    this.errorListeners.clear();
+    if (this.activeUnsub) {
+      try {
+        this.activeUnsub();
+      } catch (err) {
+        console.warn(`Error closing Firestore listener for ${this.path}:`, err);
+      }
+      this.activeUnsub = null;
+      const listenerTag = this.tag ? `${this.path} [${this.tag}]` : this.path;
+      diagnostics.unregisterListener(listenerTag, 'SubscriptionManager');
+    }
+  }
+
   private startFirestoreListener() {
-    diagnostics.registerListener(this.path, 'SubscriptionManager');
-    const targetRef = this.isDoc ? doc(db, this.path) : collection(db, this.path);
+    const listenerTag = this.tag ? `${this.path} [${this.tag}]` : this.path;
+    diagnostics.registerListener(listenerTag, 'SubscriptionManager');
+    const targetRef = this.queryFactory
+      ? this.queryFactory()
+      : (this.isDoc ? doc(db, this.path) : collection(db, this.path));
+
     this.activeUnsub = onSnapshot(
       targetRef as any,
       (snapshot: any) => {
         try {
           const docCount = snapshot.docChanges ? snapshot.docChanges().length : (snapshot.size || (snapshot.exists && snapshot.exists() ? 1 : 0));
-          diagnostics.logListenerEvent(this.path, docCount);
-          diagnostics.logRead(this.path, 'SubscriptionManager.onSnapshot', docCount, 'تحديث لحظي Real-Time Stream');
+          diagnostics.logListenerEvent(listenerTag, docCount);
+          diagnostics.logRead(listenerTag, 'SubscriptionManager.onSnapshot', docCount, `تحديث لحظي Real-Time Stream (${this.tag || 'All'})`);
 
           const transformed = this.transform(snapshot);
           this.cachedData = transformed;
@@ -416,11 +571,11 @@ class SubscriptionManager<T> {
             try {
               callback(transformed);
             } catch (err) {
-              console.error(`Error in listener callback for ${this.path}:`, err);
+              console.error(`Error in listener callback for ${listenerTag}:`, err);
             }
           });
         } catch (err) {
-          console.error(`Error transforming snapshot for ${this.path}:`, err);
+          console.error(`Error transforming snapshot for ${listenerTag}:`, err);
         }
       },
       (error: any) => {
@@ -429,7 +584,7 @@ class SubscriptionManager<T> {
           try {
             errCb(error);
           } catch (e) {
-            console.error(`Error in error callback for ${this.path}:`, e);
+            console.error(`Error in error callback for ${listenerTag}:`, e);
           }
         });
       }
@@ -470,18 +625,82 @@ const employeesManager = new SubscriptionManager<Employee[]>(
   }
 );
 
-const tasksManager = new SubscriptionManager<Task[]>(
-  TASKS_COLLECTION,
-  false,
-  (snapshot) => {
+// Map of scoped task subscription managers (e.g. 'all' or by specific technician employeeId)
+const tasksManagersMap = new Map<string, SubscriptionManager<Task[]>>();
+
+export function getOrCreateTasksManager(employeeId?: string): SubscriptionManager<Task[]> {
+  const key = employeeId ? `emp_${employeeId}` : 'all';
+  let mgr = tasksManagersMap.get(key);
+  if (!mgr) {
+    mgr = new SubscriptionManager<Task[]>(
+      TASKS_COLLECTION,
+      false,
+      (snapshot) => {
+        const list: Task[] = [];
+        snapshot.forEach((docSnap: any) => {
+          list.push(docSnap.data() as Task);
+        });
+        list.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+        return list;
+      },
+      key === 'all' ? 'futurex_tasks_cache' : `futurex_tasks_cache_${key}`,
+      () => {
+        if (employeeId) {
+          return query(collection(db, TASKS_COLLECTION), where('employeeId', '==', employeeId), limit(50));
+        }
+        return query(collection(db, TASKS_COLLECTION), limit(50));
+      },
+      employeeId ? `where('employeeId', '==', '${employeeId}'), limit(50)` : 'limit(50)'
+    );
+    tasksManagersMap.set(key, mgr);
+  }
+  return mgr;
+}
+
+const tasksManager = getOrCreateTasksManager();
+
+/**
+ * On-demand task fetcher with strict limit (default: 50) and local caching.
+ * Transforms large collection reading from continuous onSnapshot to on-demand getDocs,
+ * drastically reducing Firestore read consumption for Owner / Manager dashboards.
+ */
+export async function getTasks(
+  forceRefresh: boolean = false, 
+  limitCount: number = 50, 
+  employeeId?: string
+): Promise<Task[]> {
+  const cacheKey = employeeId ? `futurex_tasks_cache_${employeeId}` : 'futurex_tasks_cache';
+  const syncKey = employeeId ? `futurex_tasks_sync_${employeeId}` : 'futurex_tasks_last_sync';
+
+  if (!forceRefresh) {
+    const cached = getLocalCache<Task[]>(cacheKey, syncKey);
+    if (cached.data && cached.isFresh) {
+      diagnostics.logCacheHit(TASKS_COLLECTION, `getTasks (Local Cache Hit${employeeId ? ` emp=${employeeId}` : ''})`);
+      return cached.data;
+    }
+  }
+
+  const docPath = TASKS_COLLECTION;
+  try {
+    const q = employeeId
+      ? query(collection(db, TASKS_COLLECTION), where('employeeId', '==', employeeId), limit(limitCount))
+      : query(collection(db, TASKS_COLLECTION), limit(limitCount));
+
+    const snap = await getDocs(q as any);
+    diagnostics.logRead(TASKS_COLLECTION, 'getTasks', snap.size, `جلب المهام عند الطلب بحد أقصى ${limitCount}${employeeId ? ` للموظف (${employeeId})` : ' (حساب المالك/المدير)'}`);
     const list: Task[] = [];
-    snapshot.forEach((docSnap: any) => {
+    snap.forEach((docSnap: any) => {
       list.push(docSnap.data() as Task);
     });
     list.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+    setLocalCache(cacheKey, syncKey, list);
     return list;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, docPath, false);
+    const cached = getLocalCache<Task[]>(cacheKey, syncKey);
+    return cached.data || [];
   }
-);
+}
 
 const settingsManager = new SubscriptionManager<any>(
   `${SETTINGS_COLLECTION}/credentials`,
@@ -513,9 +732,14 @@ export function subscribeEmployees(onUpdate: (employees: Employee[]) => void, on
   return employeesManager.subscribe(onUpdate, onError);
 }
 
-// 3. Real-time Subscription - Tasks (Multiplexed)
-export function subscribeTasks(onUpdate: (tasks: Task[]) => void, onError: (err: any) => void) {
-  return tasksManager.subscribe(onUpdate, onError);
+// 3. Real-time Subscription - Tasks (Multiplexed & Scoped by where condition)
+export function subscribeTasks(
+  onUpdate: (tasks: Task[]) => void, 
+  onError: (err: any) => void,
+  employeeId?: string
+) {
+  const mgr = getOrCreateTasksManager(employeeId);
+  return mgr.subscribe(onUpdate, onError);
 }
 
 // 4. Real-time Subscription - Settings (Multiplexed)
@@ -984,7 +1208,10 @@ const usersManager = new SubscriptionManager<SystemUser[]>(
       if (u.role === 'admin') {
         u.role = 'manager';
       }
-      if (u.role === 'owner' || u.role === 'supervisor' || u.role === 'manager' || u.role === 'technician') {
+      if (u.role === 'employee') {
+        u.role = 'technician';
+      }
+      if (u.role === 'owner' || u.role === 'supervisor' || u.role === 'manager' || u.role === 'technician' || u.role === 'accountant') {
         list.push(u as SystemUser);
       }
     });
@@ -993,6 +1220,25 @@ const usersManager = new SubscriptionManager<SystemUser[]>(
   },
   'futurex_users_cache'
 );
+
+// Direct on-demand fetch of users from Firestore (for login fallback)
+export async function getUsersDirect(): Promise<SystemUser[]> {
+  try {
+    diagnostics.logRead('users', 'getUsersDirect', 1, 'استعلام فوري للحسابات عند تسجيل الدخول');
+    const snap = await getDocs(collection(db, 'users'));
+    const list: SystemUser[] = [];
+    snap.forEach((docSnap: any) => {
+      const u = docSnap.data() as any;
+      if (u.role === 'admin') u.role = 'manager';
+      if (u.role === 'employee') u.role = 'technician';
+      list.push(u as SystemUser);
+    });
+    return list;
+  } catch (err) {
+    console.warn('getUsersDirect warning:', err);
+    return [];
+  }
+}
 
 // 9e. Real-time Subscription - System Users (Multiplexed)
 export function subscribeUsers(onUpdate: (users: SystemUser[]) => void, onError: (err: any) => void) {
@@ -1243,43 +1489,72 @@ export async function wipeDatabase() {
 // 1. ATTENDANCE RECORDS (attendance_records)
 // --------------------------------------------------------------------------
 
-const attendanceRecordsManager = new SubscriptionManager<AttendanceRecord[]>(
-  ATTENDANCE_COLLECTION,
-  false,
-  (snapshot) => {
-    const list: AttendanceRecord[] = [];
-    snapshot.forEach((docSnap: any) => {
-      list.push(docSnap.data() as AttendanceRecord);
-    });
-    list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return list;
-  },
-  'futurex_attendance_records_cache'
-);
+// Map of scoped attendance subscription managers (e.g. 'all' or specific employeeId)
+const attendanceManagersMap = new Map<string, SubscriptionManager<AttendanceRecord[]>>();
+
+export function getOrCreateAttendanceManager(employeeId?: string): SubscriptionManager<AttendanceRecord[]> {
+  const key = employeeId ? `emp_${employeeId}` : 'all';
+  let mgr = attendanceManagersMap.get(key);
+  if (!mgr) {
+    mgr = new SubscriptionManager<AttendanceRecord[]>(
+      ATTENDANCE_COLLECTION,
+      false,
+      (snapshot) => {
+        const list: AttendanceRecord[] = [];
+        snapshot.forEach((docSnap: any) => {
+          list.push(docSnap.data() as AttendanceRecord);
+        });
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return list;
+      },
+      key === 'all' ? 'futurex_attendance_records_cache' : `futurex_attendance_cache_${key}`,
+      () => {
+        if (employeeId) {
+          return query(collection(db, ATTENDANCE_COLLECTION), where('employeeId', '==', employeeId), limit(50));
+        }
+        return query(collection(db, ATTENDANCE_COLLECTION), limit(50));
+      },
+      employeeId ? `where('employeeId', '==', '${employeeId}'), limit(50)` : 'limit(50)'
+    );
+    attendanceManagersMap.set(key, mgr);
+  }
+  return mgr;
+}
+
+const attendanceRecordsManager = getOrCreateAttendanceManager();
 
 export function subscribeAttendanceRecords(
   onUpdate: (records: AttendanceRecord[]) => void,
-  onError: (err: any) => void
+  onError: (err: any) => void,
+  employeeId?: string
 ) {
-  return attendanceRecordsManager.subscribe(onUpdate, onError);
+  const mgr = getOrCreateAttendanceManager(employeeId);
+  return mgr.subscribe(onUpdate, onError);
 }
 
-export async function getAttendanceRecords(forceRefresh: boolean = false): Promise<AttendanceRecord[]> {
-  const cacheKey = 'futurex_attendance_records_cache';
-  const syncKey = 'futurex_attendance_records_last_sync';
+export async function getAttendanceRecords(
+  forceRefresh: boolean = false, 
+  employeeId?: string,
+  limitCount: number = 50
+): Promise<AttendanceRecord[]> {
+  const cacheKey = employeeId ? `futurex_attendance_cache_${employeeId}` : 'futurex_attendance_records_cache';
+  const syncKey = employeeId ? `futurex_attendance_sync_${employeeId}` : 'futurex_attendance_records_last_sync';
 
   if (!forceRefresh) {
     const cached = getLocalCache<AttendanceRecord[]>(cacheKey, syncKey);
     if (cached.data && cached.isFresh) {
-      diagnostics.logCacheHit(ATTENDANCE_COLLECTION, 'getAttendanceRecords (Local Cache Hit)');
+      diagnostics.logCacheHit(ATTENDANCE_COLLECTION, `getAttendanceRecords (Local Cache Hit${employeeId ? ` emp=${employeeId}` : ''})`);
       return cached.data;
     }
   }
 
   const docPath = ATTENDANCE_COLLECTION;
   try {
-    const snap = await getDocs(collection(db, ATTENDANCE_COLLECTION));
-    diagnostics.logRead(ATTENDANCE_COLLECTION, 'getAttendanceRecords', snap.size, 'جلب سجلات الحضور بطلب صريح أو انتهاء الكاش');
+    const q = employeeId
+      ? query(collection(db, ATTENDANCE_COLLECTION), where('employeeId', '==', employeeId), limit(limitCount))
+      : query(collection(db, ATTENDANCE_COLLECTION), limit(limitCount));
+    const snap = await getDocs(q as any);
+    diagnostics.logRead(ATTENDANCE_COLLECTION, 'getAttendanceRecords', snap.size, `جلب سجلات الحضور بحد أقصى ${limitCount}${employeeId ? ` بشرط المعرف (${employeeId})` : ' (حساب المالك/المدير)'}`);
     const list: AttendanceRecord[] = [];
     snap.forEach((docSnap: any) => {
       list.push(docSnap.data() as AttendanceRecord);
@@ -1360,25 +1635,47 @@ export async function softDeleteAttendanceRecord(id: string, deletedBy?: string,
 // 2. OVERTIME RECORDS (overtime_records)
 // --------------------------------------------------------------------------
 
-const overtimeRecordsManager = new SubscriptionManager<OvertimeRecord[]>(
-  OVERTIME_COLLECTION,
-  false,
-  (snapshot) => {
-    const list: OvertimeRecord[] = [];
-    snapshot.forEach((docSnap: any) => {
-      list.push(docSnap.data() as OvertimeRecord);
-    });
-    list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return list;
-  },
-  'futurex_overtime_records_cache'
-);
+// Map of scoped overtime subscription managers (e.g. 'all' or specific employeeId)
+const overtimeManagersMap = new Map<string, SubscriptionManager<OvertimeRecord[]>>();
+
+export function getOrCreateOvertimeManager(employeeId?: string): SubscriptionManager<OvertimeRecord[]> {
+  const key = employeeId ? `emp_${employeeId}` : 'all';
+  let mgr = overtimeManagersMap.get(key);
+  if (!mgr) {
+    mgr = new SubscriptionManager<OvertimeRecord[]>(
+      OVERTIME_COLLECTION,
+      false,
+      (snapshot) => {
+        const list: OvertimeRecord[] = [];
+        snapshot.forEach((docSnap: any) => {
+          list.push(docSnap.data() as OvertimeRecord);
+        });
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return list;
+      },
+      key === 'all' ? 'futurex_overtime_records_cache' : `futurex_overtime_cache_${key}`,
+      () => {
+        if (employeeId) {
+          return query(collection(db, OVERTIME_COLLECTION), where('employeeId', '==', employeeId), limit(50));
+        }
+        return query(collection(db, OVERTIME_COLLECTION), limit(50));
+      },
+      employeeId ? `where('employeeId', '==', '${employeeId}'), limit(50)` : 'limit(50)'
+    );
+    overtimeManagersMap.set(key, mgr);
+  }
+  return mgr;
+}
+
+const overtimeRecordsManager = getOrCreateOvertimeManager();
 
 export function subscribeOvertimeRecords(
   onUpdate: (records: OvertimeRecord[]) => void,
-  onError: (err: any) => void
+  onError: (err: any) => void,
+  employeeId?: string
 ) {
-  return overtimeRecordsManager.subscribe(onUpdate, onError);
+  const mgr = getOrCreateOvertimeManager(employeeId);
+  return mgr.subscribe(onUpdate, onError);
 }
 
 export async function getOvertimeRecords(forceRefresh: boolean = false): Promise<OvertimeRecord[]> {
@@ -1484,25 +1781,47 @@ export async function softDeleteOvertimeRecord(id: string, deletedBy?: string, r
 // 3. LEAVE REQUESTS (leave_requests)
 // --------------------------------------------------------------------------
 
-const leaveRequestsManager = new SubscriptionManager<LeaveRequest[]>(
-  LEAVE_REQUESTS_COLLECTION,
-  false,
-  (snapshot) => {
-    const list: LeaveRequest[] = [];
-    snapshot.forEach((docSnap: any) => {
-      list.push(docSnap.data() as LeaveRequest);
-    });
-    list.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-    return list;
-  },
-  'futurex_leave_requests_cache'
-);
+// Map of scoped leave requests subscription managers (e.g. 'all' or specific employeeId)
+const leaveRequestsManagersMap = new Map<string, SubscriptionManager<LeaveRequest[]>>();
+
+export function getOrCreateLeaveRequestsManager(employeeId?: string): SubscriptionManager<LeaveRequest[]>{
+  const key = employeeId ? `emp_${employeeId}` : 'all';
+  let mgr = leaveRequestsManagersMap.get(key);
+  if (!mgr) {
+    mgr = new SubscriptionManager<LeaveRequest[]>(
+      LEAVE_REQUESTS_COLLECTION,
+      false,
+      (snapshot) => {
+        const list: LeaveRequest[] = [];
+        snapshot.forEach((docSnap: any) => {
+          list.push(docSnap.data() as LeaveRequest);
+        });
+        list.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+        return list;
+      },
+      key === 'all' ? 'futurex_leave_requests_cache' : `futurex_leave_cache_${key}`,
+      () => {
+        if (employeeId) {
+          return query(collection(db, LEAVE_REQUESTS_COLLECTION), where('employeeId', '==', employeeId), limit(50));
+        }
+        return query(collection(db, LEAVE_REQUESTS_COLLECTION), limit(50));
+      },
+      employeeId ? `where('employeeId', '==', '${employeeId}'), limit(50)` : 'limit(50)'
+    );
+    leaveRequestsManagersMap.set(key, mgr);
+  }
+  return mgr;
+}
+
+const leaveRequestsManager = getOrCreateLeaveRequestsManager();
 
 export function subscribeLeaveRequests(
   onUpdate: (requests: LeaveRequest[]) => void,
-  onError: (err: any) => void
+  onError: (err: any) => void,
+  employeeId?: string
 ) {
-  return leaveRequestsManager.subscribe(onUpdate, onError);
+  const mgr = getOrCreateLeaveRequestsManager(employeeId);
+  return mgr.subscribe(onUpdate, onError);
 }
 
 export async function getLeaveRequests(forceRefresh: boolean = false): Promise<LeaveRequest[]> {
@@ -1697,25 +2016,47 @@ export async function softDeleteLeaveRequest(id: string, deletedBy?: string, rea
 // 3.5 GRACE REQUESTS (grace_requests - طلبات سماحية التأخير والخروج المبكر)
 // --------------------------------------------------------------------------
 
-const graceRequestsManager = new SubscriptionManager<GraceRequest[]>(
-  GRACE_REQUESTS_COLLECTION,
-  false,
-  (snapshot) => {
-    const list: GraceRequest[] = [];
-    snapshot.forEach((docSnap: any) => {
-      list.push(docSnap.data() as GraceRequest);
-    });
-    list.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
-    return list;
-  },
-  'futurex_grace_requests_cache'
-);
+// Map of scoped grace requests subscription managers (e.g. 'all' or specific employeeId)
+const graceRequestsManagersMap = new Map<string, SubscriptionManager<GraceRequest[]>>();
+
+export function getOrCreateGraceRequestsManager(employeeId?: string): SubscriptionManager<GraceRequest[]> {
+  const key = employeeId ? `emp_${employeeId}` : 'all';
+  let mgr = graceRequestsManagersMap.get(key);
+  if (!mgr) {
+    mgr = new SubscriptionManager<GraceRequest[]>(
+      GRACE_REQUESTS_COLLECTION,
+      false,
+      (snapshot) => {
+        const list: GraceRequest[] = [];
+        snapshot.forEach((docSnap: any) => {
+          list.push(docSnap.data() as GraceRequest);
+        });
+        list.sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+        return list;
+      },
+      key === 'all' ? 'futurex_grace_requests_cache' : `futurex_grace_cache_${key}`,
+      () => {
+        if (employeeId) {
+          return query(collection(db, GRACE_REQUESTS_COLLECTION), where('employeeId', '==', employeeId), limit(50));
+        }
+        return query(collection(db, GRACE_REQUESTS_COLLECTION), limit(50));
+      },
+      employeeId ? `where('employeeId', '==', '${employeeId}'), limit(50)` : 'limit(50)'
+    );
+    graceRequestsManagersMap.set(key, mgr);
+  }
+  return mgr;
+}
+
+const graceRequestsManager = getOrCreateGraceRequestsManager();
 
 export function subscribeGraceRequests(
   onUpdate: (requests: GraceRequest[]) => void,
-  onError: (err: any) => void
+  onError: (err: any) => void,
+  employeeId?: string
 ) {
-  return graceRequestsManager.subscribe(onUpdate, onError);
+  const mgr = getOrCreateGraceRequestsManager(employeeId);
+  return mgr.subscribe(onUpdate, onError);
 }
 
 export async function getGraceRequestById(id: string): Promise<GraceRequest | null> {
@@ -2199,3 +2540,449 @@ export async function saveCompanySettings(settings: CompanySettings): Promise<vo
     handleFirestoreError(err, OperationType.WRITE, docPath);
   }
 }
+
+// ==========================================
+// Inventory & Materials Management Services
+// ==========================================
+
+export async function getMaterialItems(force = false): Promise<MaterialItem[]> {
+  const cacheKey = 'futurex_material_items_cache';
+  const syncKey = 'futurex_material_items_last_sync';
+  
+  if (!force) {
+    const cached = getLocalCache<MaterialItem[]>(cacheKey, syncKey);
+    if (cached.data && cached.data.length > 0) {
+      return cached.data;
+    }
+  }
+
+  try {
+    const snap = await getDocs(collection(db, MATERIAL_ITEMS_COLLECTION));
+    if (snap.empty) {
+      // Seed default catalog
+      const batch = writeBatch(db);
+      for (const item of DEFAULT_MATERIAL_ITEMS) {
+        batch.set(doc(db, MATERIAL_ITEMS_COLLECTION, item.id), item);
+      }
+      await batch.commit();
+      setLocalCache(cacheKey, syncKey, DEFAULT_MATERIAL_ITEMS);
+      return DEFAULT_MATERIAL_ITEMS;
+    }
+
+    const items: MaterialItem[] = [];
+    snap.forEach((d) => {
+      items.push({ id: d.id, ...(d.data() as any) } as MaterialItem);
+    });
+    setLocalCache(cacheKey, syncKey, items);
+    return items;
+  } catch (err) {
+    console.warn('Error fetching material items, falling back to defaults:', err);
+    return DEFAULT_MATERIAL_ITEMS;
+  }
+}
+
+export async function saveMaterialItem(item: MaterialItem): Promise<void> {
+  try {
+    await setDoc(doc(db, MATERIAL_ITEMS_COLLECTION, item.id), item);
+    // Invalidate cache
+    try {
+      localStorage.removeItem('futurex_material_items_last_sync');
+    } catch (_) {}
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${MATERIAL_ITEMS_COLLECTION}/${item.id}`);
+  }
+}
+
+export async function deleteMaterialItem(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, MATERIAL_ITEMS_COLLECTION, id));
+    try {
+      localStorage.removeItem('futurex_material_items_last_sync');
+      localStorage.removeItem('futurex_material_items_cache');
+    } catch (_) {}
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${MATERIAL_ITEMS_COLLECTION}/${id}`);
+  }
+}
+
+export async function adjustWarehouseStock(payload: {
+  materialId: string;
+  materialName: string;
+  unit: string;
+  mode: 'add' | 'deduct' | 'set';
+  quantity: number;
+  reason?: string;
+  performedBy: string;
+}): Promise<number> {
+  const docPath = `${MATERIAL_ITEMS_COLLECTION}/${payload.materialId}`;
+  try {
+    const matRef = doc(db, MATERIAL_ITEMS_COLLECTION, payload.materialId);
+    const snap = await getDoc(matRef);
+    let prevQty = 0;
+    if (snap.exists()) {
+      prevQty = Number(snap.data()?.warehouseStock ?? 0);
+    }
+
+    let newQty = prevQty;
+    let txnType: 'warehouse_in' | 'warehouse_out' | 'adjustment' = 'warehouse_in';
+    const amount = Number(payload.quantity);
+
+    if (payload.mode === 'add') {
+      newQty = prevQty + amount;
+      txnType = 'warehouse_in';
+    } else if (payload.mode === 'deduct') {
+      newQty = Math.max(0, prevQty - amount);
+      txnType = 'warehouse_out';
+    } else {
+      newQty = Math.max(0, amount);
+      txnType = 'adjustment';
+    }
+
+    await updateDoc(matRef, {
+      warehouseStock: newQty
+    });
+
+    try {
+      localStorage.removeItem('futurex_material_items_last_sync');
+      localStorage.removeItem('futurex_material_items_cache');
+    } catch (_) {}
+
+    // Record warehouse transaction
+    const txnId = `txn-wh-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const txn: MaterialTransaction = {
+      id: txnId,
+      type: txnType,
+      materialId: payload.materialId,
+      materialName: payload.materialName,
+      unit: payload.unit,
+      quantity: Math.abs(newQty - prevQty),
+      previousQuantity: prevQty,
+      newQuantity: newQty,
+      notes: payload.reason || (payload.mode === 'add' ? 'إضافة رصيد للمخزن' : 'سحب كمية من المخزن'),
+      performedBy: payload.performedBy,
+      createdAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, MATERIAL_TRANSACTIONS_COLLECTION, txnId), txn);
+
+    return newQty;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, docPath);
+    return 0;
+  }
+}
+
+export async function getTechnicianInventory(employeeId?: string): Promise<TechnicianStockItem[]> {
+  try {
+    let q;
+    if (employeeId) {
+      q = query(collection(db, TECHNICIAN_INVENTORY_COLLECTION), where('employeeId', '==', employeeId));
+    } else {
+      q = collection(db, TECHNICIAN_INVENTORY_COLLECTION);
+    }
+    const snap = await getDocs(q);
+    const results: TechnicianStockItem[] = [];
+    snap.forEach((d) => {
+      results.push({ id: d.id, ...(d.data() as any) } as TechnicianStockItem);
+    });
+    return results;
+  } catch (err) {
+    console.warn('Error fetching technician inventory:', err);
+    return [];
+  }
+}
+
+export async function supplyMaterialsToTechnician(payload: {
+  employeeId: string;
+  employeeName: string;
+  items: Array<{ materialId: string; materialName: string; unit: string; quantity: number }>;
+  notes?: string;
+  suppliedBy: string;
+}): Promise<void> {
+  try {
+    for (const item of payload.items) {
+      if (item.quantity <= 0) continue;
+      const stockDocId = `${payload.employeeId}_${item.materialId}`;
+      const stockRef = doc(db, TECHNICIAN_INVENTORY_COLLECTION, stockDocId);
+      const stockSnap = await getDoc(stockRef);
+      
+      let prevQty = 0;
+      if (stockSnap.exists()) {
+        prevQty = Number(stockSnap.data()?.quantity) || 0;
+      }
+      const newQty = prevQty + Number(item.quantity);
+
+      const updatedStock: TechnicianStockItem = {
+        id: stockDocId,
+        employeeId: payload.employeeId,
+        employeeName: payload.employeeName,
+        materialId: item.materialId,
+        materialName: item.materialName,
+        unit: item.unit,
+        quantity: newQty,
+        lastUpdatedAt: new Date().toISOString()
+      };
+      await setDoc(stockRef, updatedStock);
+
+      // Decrement central warehouse stock if material exists
+      try {
+        const matRef = doc(db, MATERIAL_ITEMS_COLLECTION, item.materialId);
+        const matSnap = await getDoc(matRef);
+        if (matSnap.exists()) {
+          const currentWh = Number(matSnap.data()?.warehouseStock ?? 0);
+          const newWh = Math.max(0, currentWh - Number(item.quantity));
+          await updateDoc(matRef, { warehouseStock: newWh });
+          try {
+            localStorage.removeItem('futurex_material_items_last_sync');
+            localStorage.removeItem('futurex_material_items_cache');
+          } catch (_) {}
+        }
+      } catch (whErr) {
+        console.warn('Could not update warehouse stock on supply:', whErr);
+      }
+
+      // Record transaction
+      const txnId = `txn-sup-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const txn: MaterialTransaction = {
+        id: txnId,
+        type: 'supply',
+        employeeId: payload.employeeId,
+        employeeName: payload.employeeName,
+        materialId: item.materialId,
+        materialName: item.materialName,
+        unit: item.unit,
+        quantity: Number(item.quantity),
+        previousQuantity: prevQty,
+        newQuantity: newQty,
+        notes: payload.notes || '',
+        performedBy: payload.suppliedBy,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, MATERIAL_TRANSACTIONS_COLLECTION, txnId), txn);
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, TECHNICIAN_INVENTORY_COLLECTION);
+  }
+}
+
+export async function consumeMaterialsForTask(payload: {
+  taskId: string;
+  taskType: string;
+  employeeId: string;
+  employeeName: string;
+  subscriberName?: string;
+  subscriberPhone?: string;
+  items: ConsumedMaterial[];
+  performedBy: string;
+  notes?: string;
+}): Promise<void> {
+  try {
+    for (const item of payload.items) {
+      if (item.quantity <= 0) continue;
+      const stockDocId = `${payload.employeeId}_${item.materialId}`;
+      const stockRef = doc(db, TECHNICIAN_INVENTORY_COLLECTION, stockDocId);
+      const stockSnap = await getDoc(stockRef);
+
+      let prevQty = 0;
+      if (stockSnap.exists()) {
+        prevQty = Number(stockSnap.data()?.quantity) || 0;
+      }
+      const newQty = Math.max(0, prevQty - Number(item.quantity));
+
+      const updatedStock: TechnicianStockItem = {
+        id: stockDocId,
+        employeeId: payload.employeeId,
+        employeeName: payload.employeeName,
+        materialId: item.materialId,
+        materialName: item.materialName,
+        unit: item.unit,
+        quantity: newQty,
+        lastUpdatedAt: new Date().toISOString()
+      };
+      await setDoc(stockRef, updatedStock);
+
+      // Record consumption transaction
+      const txnId = `txn-con-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const txn: MaterialTransaction = {
+        id: txnId,
+        type: 'consumption',
+        employeeId: payload.employeeId,
+        employeeName: payload.employeeName,
+        materialId: item.materialId,
+        materialName: item.materialName,
+        unit: item.unit,
+        quantity: Number(item.quantity),
+        previousQuantity: prevQty,
+        newQuantity: newQty,
+        taskId: payload.taskId,
+        taskType: payload.taskType,
+        subscriberName: payload.subscriberName || '',
+        subscriberPhone: payload.subscriberPhone || '',
+        notes: item.notes || payload.notes || '',
+        performedBy: payload.performedBy,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, MATERIAL_TRANSACTIONS_COLLECTION, txnId), txn);
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, TECHNICIAN_INVENTORY_COLLECTION);
+  }
+}
+
+export async function returnMaterialsFromTechnician(payload: {
+  employeeId: string;
+  employeeName: string;
+  materialId: string;
+  materialName: string;
+  unit: string;
+  quantity: number;
+  notes?: string;
+  returnedTo: string;
+}): Promise<void> {
+  try {
+    const stockDocId = `${payload.employeeId}_${payload.materialId}`;
+    const stockRef = doc(db, TECHNICIAN_INVENTORY_COLLECTION, stockDocId);
+    const stockSnap = await getDoc(stockRef);
+
+    let prevQty = 0;
+    if (stockSnap.exists()) {
+      prevQty = Number(stockSnap.data()?.quantity) || 0;
+    }
+    const newQty = Math.max(0, prevQty - Number(payload.quantity));
+
+    await setDoc(stockRef, {
+      id: stockDocId,
+      employeeId: payload.employeeId,
+      employeeName: payload.employeeName,
+      materialId: payload.materialId,
+      materialName: payload.materialName,
+      unit: payload.unit,
+      quantity: newQty,
+      lastUpdatedAt: new Date().toISOString()
+    });
+
+    const txnId = `txn-ret-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const txn: MaterialTransaction = {
+      id: txnId,
+      type: 'return',
+      employeeId: payload.employeeId,
+      employeeName: payload.employeeName,
+      materialId: payload.materialId,
+      materialName: payload.materialName,
+      unit: payload.unit,
+      quantity: Number(payload.quantity),
+      previousQuantity: prevQty,
+      newQuantity: newQty,
+      notes: payload.notes || '',
+      performedBy: payload.returnedTo,
+      createdAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, MATERIAL_TRANSACTIONS_COLLECTION, txnId), txn);
+
+    // Return to central warehouse stock
+    try {
+      const matRef = doc(db, MATERIAL_ITEMS_COLLECTION, payload.materialId);
+      const matSnap = await getDoc(matRef);
+      if (matSnap.exists()) {
+        const currentWh = Number(matSnap.data()?.warehouseStock ?? 0);
+        const newWh = currentWh + Number(payload.quantity);
+        await updateDoc(matRef, { warehouseStock: newWh });
+        try {
+          localStorage.removeItem('futurex_material_items_last_sync');
+          localStorage.removeItem('futurex_material_items_cache');
+        } catch (_) {}
+      }
+    } catch (whErr) {
+      console.warn('Could not update warehouse stock on return:', whErr);
+    }
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, TECHNICIAN_INVENTORY_COLLECTION);
+  }
+}
+
+export async function adjustTechnicianStock(payload: {
+  employeeId: string;
+  employeeName: string;
+  materialId: string;
+  materialName: string;
+  unit: string;
+  newQuantity: number;
+  reason: string;
+  adjustedBy: string;
+}): Promise<void> {
+  try {
+    const stockDocId = `${payload.employeeId}_${payload.materialId}`;
+    const stockRef = doc(db, TECHNICIAN_INVENTORY_COLLECTION, stockDocId);
+    const stockSnap = await getDoc(stockRef);
+
+    let prevQty = 0;
+    if (stockSnap.exists()) {
+      prevQty = Number(stockSnap.data()?.quantity) || 0;
+    }
+
+    await setDoc(stockRef, {
+      id: stockDocId,
+      employeeId: payload.employeeId,
+      employeeName: payload.employeeName,
+      materialId: payload.materialId,
+      materialName: payload.materialName,
+      unit: payload.unit,
+      quantity: Number(payload.newQuantity),
+      lastUpdatedAt: new Date().toISOString()
+    });
+
+    const txnId = `txn-adj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const txn: MaterialTransaction = {
+      id: txnId,
+      type: 'adjustment',
+      employeeId: payload.employeeId,
+      employeeName: payload.employeeName,
+      materialId: payload.materialId,
+      materialName: payload.materialName,
+      unit: payload.unit,
+      quantity: Math.abs(Number(payload.newQuantity) - prevQty),
+      previousQuantity: prevQty,
+      newQuantity: Number(payload.newQuantity),
+      notes: payload.reason,
+      performedBy: payload.adjustedBy,
+      createdAt: new Date().toISOString()
+    };
+    await setDoc(doc(db, MATERIAL_TRANSACTIONS_COLLECTION, txnId), txn);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, TECHNICIAN_INVENTORY_COLLECTION);
+  }
+}
+
+export async function getMaterialTransactions(filter?: {
+  employeeId?: string;
+  taskId?: string;
+  type?: string;
+  limitCount?: number;
+}): Promise<MaterialTransaction[]> {
+  try {
+    let q;
+    const maxLimit = filter?.limitCount || 50;
+    if (filter?.employeeId) {
+      q = query(
+        collection(db, MATERIAL_TRANSACTIONS_COLLECTION),
+        where('employeeId', '==', filter.employeeId),
+        limit(maxLimit)
+      );
+    } else {
+      q = query(collection(db, MATERIAL_TRANSACTIONS_COLLECTION), limit(maxLimit));
+    }
+
+    const snap = await getDocs(q);
+    const txns: MaterialTransaction[] = [];
+    snap.forEach((d) => {
+      txns.push({ id: d.id, ...(d.data() as any) } as MaterialTransaction);
+    });
+
+    // Client-side sort by createdAt desc
+    txns.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return txns;
+  } catch (err) {
+    console.warn('Error fetching material transactions:', err);
+    return [];
+  }
+}
+

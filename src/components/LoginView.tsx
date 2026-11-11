@@ -3,7 +3,7 @@ import { Award, Lock, User, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface LoginViewProps {
-  onLogin: (username: string, password: string) => { success: boolean; role?: 'owner' | 'admin' | 'viewer'; error?: string };
+  onLogin: (username: string, password: string) => { success: boolean; role?: 'owner' | 'admin' | 'viewer' | 'technician' | 'manager' | 'supervisor'; error?: string };
 }
 
 export default function LoginView({ onLogin }: LoginViewProps) {

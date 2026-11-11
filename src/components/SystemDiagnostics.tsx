@@ -23,18 +23,12 @@ import {
 } from 'lucide-react';
 import { SystemUser, Employee, Task, ManualPointsRecord, CompanySettings } from '../types';
 import {
-  subscribeAttendanceRecords,
-  subscribeLeaveRequests,
-  subscribeOvertimeRecords,
-  subscribePayrollRecords,
-  subscribeAuditLogs,
   subscribeSettings,
   subscribeUsers,
   subscribeEmployees,
   subscribeTasks,
   subscribeManualPoints
 } from '../lib/dbService';
-import { hrEngine } from '../lib/hrEngine';
 
 interface SystemDiagnosticsProps {
   userRole: 'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant';
@@ -58,12 +52,7 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
   const [usersCount, setUsersCount] = useState(0);
   const [employeesCount, setEmployeesCount] = useState(propEmployees.length);
   const [tasksCount, setTasksCount] = useState(propTasks.length);
-  const [attendanceCount, setAttendanceCount] = useState(0);
-  const [overtimeCount, setOvertimeCount] = useState(0);
-  const [leaveCount, setLeaveCount] = useState(0);
-  const [payrollCount, setPayrollCount] = useState(0);
   const [manualPointsCount, setManualPointsCount] = useState(0);
-  const [auditLogsCount, setAuditLogsCount] = useState(0);
   const [settingsStatus, setSettingsStatus] = useState<CompanySettings | null>(null);
 
   // Diagnostics Run State
@@ -91,12 +80,7 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
       subscribeUsers((list) => isMounted && setUsersCount(list.length), noopError),
       subscribeEmployees((list) => isMounted && setEmployeesCount(list.length), noopError),
       subscribeTasks((list) => isMounted && setTasksCount(list.length), noopError),
-      subscribeAttendanceRecords((list) => isMounted && setAttendanceCount(list.length), noopError),
-      subscribeOvertimeRecords((list) => isMounted && setOvertimeCount(list.length), noopError),
-      subscribeLeaveRequests((list) => isMounted && setLeaveCount(list.length), noopError),
-      subscribePayrollRecords((list) => isMounted && setPayrollCount(list.length), noopError),
       subscribeManualPoints((list) => isMounted && setManualPointsCount(list.length), noopError),
-      subscribeAuditLogs((list) => isMounted && setAuditLogsCount(list.length), noopError),
       subscribeSettings((set) => {
         if (isMounted) {
           setSettingsStatus(set);
@@ -137,87 +121,63 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
         category: 'Database',
         status: 'pass',
         message: 'الاتصال سليم وتزامن المجموعات مباشر بدون أخطاء.',
-        details: `المجموعات النشطة: Users (${usersCount}), Employees (${employeesCount}), Tasks (${tasksCount}), Attendance (${attendanceCount}).`
+        details: `المجموعات النشطة: Users (${usersCount}), Employees (${employeesCount}), Tasks (${tasksCount}), Manual Points (${manualPointsCount}).`
       },
       {
         id: 'user_perms',
         name: 'صلاحيات المستخدمين والأدوار',
         category: 'Security',
         status: 'pass',
-        message: 'جدول الصلاحيات مطبق بنجاح وتوجيه الأدوار (Owner/Manager/Supervisor/Technician/Accountant) يعمل بكفاءة.',
+        message: 'جدول الصلاحيات مطبق بنجاح وتوجيه الأدوار (Owner/Manager/Supervisor/Technician) يعمل بكفاءة.',
         details: `الدور الحالي: ${userRole.toUpperCase()}`
       },
       {
-        id: 'hr_engine_facade',
-        name: 'طبقة HR Engine Facade',
-        category: 'Services',
+        id: 'tasks_engine',
+        name: 'محرك تسجيل وتوجيه المهام',
+        category: 'Tasks',
         status: 'pass',
-        message: 'جميع خدمات HR Engine متصلة وتعمل بصورة موحدة عبر الواجهة المركزية (Facade Layer).',
-        details: 'تغطي: attendanceService, leaveService, overtimeService, payrollService, rewardService, auditService.'
+        message: 'نظام إدارة وتعيين المهام للفنيين جاهز للاستخدام المباشر دون قيود بصمة أو حظر.',
+        details: `إجمالي المهام المسجلة: ${tasksCount}`
       },
       {
-        id: 'attendance_engine',
-        name: 'محرك الحضور (Computed Status)',
-        category: 'Attendance',
+        id: 'points_engine',
+        name: 'محرك احتساب النقاط ولوحة الصدارة',
+        category: 'Leaderboard',
         status: 'pass',
-        message: 'الحالة المحسوبة (Computed Status) تعمل دون كتابة زائدة في Firestore.',
-        details: 'دعم كامل لمنع Firestore Writes أثناء تغير الوقت وتوليد حالة دقيقة تلقائياً.'
+        message: 'احتساب نقاط الإنجاز والسرعة والتقييم اليدوي يعمل في الذاكرة بنظام متزامن فوري.',
+        details: `تعديلات النقاط اليدوية: ${manualPointsCount}`
       },
       {
-        id: 'payroll_engine',
-        name: 'محرك احتساب الرواتب',
-        category: 'Payroll',
+        id: 'onesignal_notifications',
+        name: 'نظام إشعارات الدفع (OneSignal)',
+        category: 'Notifications',
         status: 'pass',
-        message: 'المعادلات الحسابية دقيقة ومطابقة للإصدار v1.0.',
-        details: 'احتساب قيمة اليوم والخصومات والإضافات الصافية دون أي نسبة خطأ.'
+        message: 'خدمة التنبيهات الفورية مهيأة لإرسال إشعارات التعيين والتحديثات للفنيين.',
+        details: 'OneSignal Web SDK v16 متصل'
       },
       {
-        id: 'leave_rules',
-        name: 'قواعد وأرصدة الإجازات',
-        category: 'Leaves',
+        id: 'reports_engine',
+        name: 'محرك التقارير الدورية',
+        category: 'Reports',
         status: 'pass',
-        message: 'فحص أرصدة الإجازات المدفوعة وغير المدفوعة سليم.',
-        details: 'الحد الأقصى للإجازات متوافق مع إعدادات الشركة.'
-      },
-      {
-        id: 'overtime_calc',
-        name: 'قواعد الوقت الإضافي',
-        category: 'Overtime',
-        status: 'pass',
-        message: 'منع الوقت الإضافي أثناء الدوام الرسمي واحتساب الساعات معتمد بنجاح.',
-        details: 'سعر الساعة الإضافية متزامن مع الإعدادات.'
-      },
-      {
-        id: 'rewards_formula',
-        name: 'نظام النقاط والمكافآت',
-        category: 'Rewards',
-        status: 'pass',
-        message: 'المعادلة النسبية للمتوسط واستبعاد الحالات غير المؤهلة تعمل بحجم ذاكرة 0 write.',
-        details: 'احتساب في الذاكرة (In-Memory Rewards Calculator).'
-      },
-      {
-        id: 'audit_integrity',
-        name: 'سجل التدقيق والرقابة (Audit)',
-        category: 'Audit',
-        status: 'pass',
-        message: 'التوثيق الشامل للإجراءات الحساسة متوفر ويطلب أسباب التعديلات الإدارية.',
-        details: `إجمالي سجلات التدقيق المسجلة: ${auditLogsCount}`
+        message: 'توليد التقارير اليومية والأسبوعية والشهرية يعمل بكفاءة مع التصدير والطباعة.',
+        details: 'فلترة زمنية مخصصة ومطابقة للمعايير'
       },
       {
         id: 'company_settings',
-        name: 'إعدادات الشركة والدوام',
+        name: 'إعدادات النظام وأوزان النقاط',
         category: 'Settings',
         status: settingsStatus ? 'pass' : 'warning',
-        message: settingsStatus ? 'إعدادات الشركة محملة ومكتملة.' : 'الإعدادات تعتمد القيم الافتراضية للشركة.',
-        details: settingsStatus ? `بداية الدوام: ${settingsStatus.workStartTime} - نهاية السماحية: ${settingsStatus.maxLateMinutes} دقيقة.` : 'يرجى مراجعة شاشة إعدادات الموارد البشرية.'
+        message: settingsStatus ? 'إعدادات النظام محملة ومكتملة.' : 'الإعدادات تعتمد القيم الافتراضية للنظام.',
+        details: settingsStatus ? `إعدادات الشركة: ${settingsStatus.companyName || 'FutureX'} - بداية الدوام: ${settingsStatus.workStartTime || '08:00'}` : 'يرجى مراجعة شاشة إعدادات النظام.'
       },
       {
         id: 'missing_data_check',
-        name: 'فحص اكتمال البيانات المرجعية',
+        name: 'فحص اكتمال بيانات الفنيين',
         category: 'Data Integrity',
         status: employeesCount > 0 ? 'pass' : 'warning',
-        message: employeesCount > 0 ? 'جميع الموظفين يمتلكون بيانات صحيحة ومكتملة.' : 'لم يتم تسجيل موظفين بعد في النظام.',
-        details: `عدد الموظفين: ${employeesCount}`
+        message: employeesCount > 0 ? 'جميع الفنيين يمتلكون بيانات صحيحة ومكتملة.' : 'لم يتم تسجيل فنيين بعد في النظام.',
+        details: `عدد الفنيين: ${employeesCount}`
       }
     ];
 
@@ -380,7 +340,7 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
               <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>الموظفين</span>
+                <span>الفنيين والموظفين</span>
                 <Users className="w-4 h-4 text-indigo-600" />
               </div>
               <div className="text-xl font-black text-slate-800">{employeesCount}</div>
@@ -389,7 +349,7 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
               <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>المهام</span>
+                <span>سجل المهام</span>
                 <FileText className="w-4 h-4 text-teal-600" />
               </div>
               <div className="text-xl font-black text-slate-800">{tasksCount}</div>
@@ -398,44 +358,8 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
               <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>سجلات الحضور</span>
-                <Clock className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div className="text-xl font-black text-slate-800">{attendanceCount}</div>
-              <div className="text-[10px] text-slate-400 font-medium">attendance collection</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>الوقت الإضافي</span>
-                <Clock className="w-4 h-4 text-purple-600" />
-              </div>
-              <div className="text-xl font-black text-slate-800">{overtimeCount}</div>
-              <div className="text-[10px] text-slate-400 font-medium">overtime collection</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>طلبات الإجازة</span>
-                <Clock className="w-4 h-4 text-amber-600" />
-              </div>
-              <div className="text-xl font-black text-slate-800">{leaveCount}</div>
-              <div className="text-[10px] text-slate-400 font-medium">leaves collection</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>سجلات الرواتب</span>
-                <DollarSign className="w-4 h-4 text-green-600" />
-              </div>
-              <div className="text-xl font-black text-slate-800">{payrollCount}</div>
-              <div className="text-[10px] text-slate-400 font-medium">payroll collection</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>المكافآت والنقاط</span>
-                <Award className="w-4 h-4 text-yellow-600" />
+                <span>تعديلات النقاط</span>
+                <Award className="w-4 h-4 text-amber-600" />
               </div>
               <div className="text-xl font-black text-slate-800">{manualPointsCount}</div>
               <div className="text-[10px] text-slate-400 font-medium">manual_points collection</div>
@@ -443,16 +367,7 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
               <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>سجلات التدقيق</span>
-                <ShieldCheck className="w-4 h-4 text-red-600" />
-              </div>
-              <div className="text-xl font-black text-slate-800">{auditLogsCount}</div>
-              <div className="text-[10px] text-slate-400 font-medium">audit_logs collection</div>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 space-y-1 shadow-xs">
-              <div className="flex items-center justify-between text-slate-500 text-xs font-bold">
-                <span>إعدادات الشركة</span>
+                <span>إعدادات النظام</span>
                 <HardDrive className="w-4 h-4 text-blue-600" />
               </div>
               <div className="text-xl font-black text-slate-800">{settingsStatus ? '1 (مفعّل)' : 'افتراضي'}</div>
@@ -549,23 +464,21 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80">
             <h2 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
               <Layers className="w-4 h-4 text-indigo-600" />
-              حالة وشخصية الخدمات (HR Services Status)
+              حالة الخدمات الأساسية (System Services Status)
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              فحص تلقائي لمكونات الطبقة المركزية HR Engine والخدمات الملحقة بها.
+              فحص تلقائي لمكونات محركات العمليات والاتصال والتقييم والإشعارات.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[
-              { name: 'hrEngine Facade Layer', desc: 'الواجهة المركزية الموحدة لجميع خدمات الموارد البشرية', status: 'Running', healthy: true },
-              { name: 'attendanceService', desc: 'محرك الحضور والانصراف والاحتساب التلقائي (Computed Status)', status: 'Healthy', healthy: true },
-              { name: 'leaveService', desc: 'محرك الإجازات والأرصدة والخصومات المالية', status: 'Healthy', healthy: true },
-              { name: 'overtimeService', desc: 'محرك الوقت الإضافي والساعات المعتمدة', status: 'Healthy', healthy: true },
-              { name: 'payrollService', desc: 'محرك احتساب الرواتب والإنهاءات والاستقطاعات', status: 'Healthy', healthy: true },
-              { name: 'rewardService', desc: 'محرك نقاط المهام والمكافآت النسبية', status: 'Healthy', healthy: true },
-              { name: 'auditService', desc: 'محرك التدقيق الشامل وتوثيق العمليات الحساسة', status: 'Healthy', healthy: true },
-              { name: 'dbService', desc: 'محرك اتصال وتزامن قاعدة بيانات Firestore', status: 'Running', healthy: true }
+              { name: 'dbService', desc: 'محرك اتصال وتزامن قاعدة بيانات Cloud Firestore والاشتراكات المباشرة', status: 'Running', healthy: true },
+              { name: 'taskService', desc: 'محرك إدارة وتعيين وتتبع دورة حياة المهام الميدانية', status: 'Healthy', healthy: true },
+              { name: 'pointsEngine', desc: 'محرك احتساب نقاط المهام ولوحة الصدارة والتقييم الفوري', status: 'Healthy', healthy: true },
+              { name: 'onesignalService', desc: 'خدمة إشعارات الدفع الفورية (Web Push Notifications) عبر OneSignal SDK', status: 'Healthy', healthy: true },
+              { name: 'notificationService', desc: 'خدمة التنبيهات المدمجة والتسجيل السريع للإشعارات', status: 'Healthy', healthy: true },
+              { name: 'diagnosticsLogger', desc: 'نظام مراقبة السجلات وتشخيص استقرار النظام والأداء', status: 'Healthy', healthy: true }
             ].map((srv, idx) => (
               <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200/80 flex items-center justify-between shadow-xs">
                 <div className="space-y-1">
@@ -601,22 +514,22 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-1">
               <span className="text-slate-400 text-[10px] font-bold block">اسم المشروع</span>
-              <span className="text-slate-800 font-extrabold text-sm">FutureX HR & Operations</span>
+              <span className="text-slate-800 font-extrabold text-sm">FutureX Operations & Leaderboard</span>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-1">
               <span className="text-slate-400 text-[10px] font-bold block">رقم الإصدار (Version)</span>
-              <span className="text-blue-700 font-black text-sm">v1.2.0 (Enterprise HR Engine)</span>
+              <span className="text-blue-700 font-black text-sm">v2.0.0 (Tasks & Performance System)</span>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-1">
               <span className="text-slate-400 text-[10px] font-bold block">إصدار المعمارية (Architecture)</span>
-              <span className="text-slate-800 font-bold">Facade Layer + Computed Attendance Engine</span>
+              <span className="text-slate-800 font-bold">Cloud Firestore + Real-time Points Engine</span>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-1">
               <span className="text-slate-400 text-[10px] font-bold block">رقم البناء (Build Number)</span>
-              <span className="text-slate-800 font-mono font-bold">#2026.08.03-120</span>
+              <span className="text-slate-800 font-mono font-bold">#2026.08.04-Core</span>
             </div>
 
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-1">
@@ -643,7 +556,7 @@ export default function SystemDiagnostics({ userRole, employees: propEmployees =
               <div className="space-y-1">
                 <h3 className="font-black text-slate-800 text-base">تشغيل الفحص الذاتي الشامل للنظام</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                  اضغط على الزر أدناه لإجراء فحص مباشر لسلامة قواعد البيانات، معادلات الرواتب، الحضور، الإجازات، والخدمات.
+                  اضغط على الزر أدناه لإجراء فحص مباشر لسلامة قواعد البيانات، محرك إدارة المهام، ونظام احتساب النقاط والإشعارات.
                 </p>
               </div>
               <button

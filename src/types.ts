@@ -113,6 +113,13 @@ export interface Task {
   delayApproved?: boolean; // Whether manager/supervisor approved reason (cancels deduction)
   delayApprovedBy?: string; // Name of supervisor/manager who approved or rejected
   delayApprovedAt?: string; // ISO timestamp of decision
+  title?: string; // Task title or type label
+  isPaused?: boolean; // Convenience flag for paused status
+  completedAt?: string; // Alias timestamp for task completion
+  durationMinutes?: number; // Duration of task in minutes
+  activeWorkTimeMs?: number; // Total active work time in milliseconds
+  totalPausedTimeMs?: number; // Total paused time in milliseconds
+  previousPostponeReason?: string; // First / Previous postpone reason when re-dispatched
 }
 
 export interface LeaderboardEntry {

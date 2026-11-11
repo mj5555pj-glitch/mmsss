@@ -33,11 +33,9 @@ import {
 } from 'lucide-react';
 import { Employee, Task, DbTaskType, PointsRules, ManualPointsRecord, AttendanceRecord } from '../types';
 import { getEffectiveWorkDateStr, isTechnicianEmployee, formatArabicDateOnly } from '../utils';
-import { subscribeAttendanceRecords } from '../lib/dbService';
 import TaskRegistration from './TaskRegistration';
 import ActiveTasksView from './ActiveTasksView';
 import DashboardStatsCard from './DashboardStatsCard';
-import DailyOperationsCenter from './DailyOperationsCenter';
 import ManualPointsCard from './ManualPointsCard';
 
 interface OwnerDashboardViewProps {
@@ -48,7 +46,6 @@ interface OwnerDashboardViewProps {
   pointsRules: PointsRules;
   userRole: string;
   manualPoints?: ManualPointsRecord[];
-  attendanceRecords?: AttendanceRecord[];
   onStartTask: (
     employeeId: string,
     taskType: string,
@@ -114,14 +111,6 @@ const ALL_AVAILABLE_CARDS: CardDefinition[] = [
     color: 'sky'
   },
   {
-    id: 'daily_attendance',
-    title: 'سجل الحضور والعمليات اليومية',
-    category: 'الموارد البشرية والدوام',
-    description: 'متابعة حضور وانصراف الكادر الوظيفي والتأخيرات والطلبات اليومية',
-    icon: Clock,
-    color: 'indigo'
-  },
-  {
     id: 'manual_points',
     title: 'إصدار النقاط والخصومات اليدوية',
     category: 'النقاط والحوافز',
@@ -133,7 +122,7 @@ const ALL_AVAILABLE_CARDS: CardDefinition[] = [
     id: 'quick_links',
     title: 'الوصول السريع للأقسام والمراكز',
     category: 'التنقل الإداري',
-    description: 'اختصارات سريعة بضغطة زر للانتقال لمركز الطلبات، الموظفين، والتقارير',
+    description: 'اختصارات سريعة بضغطة زر للانتقال لإدارة الموظفين، المهام، والتقارير',
     icon: LayoutGrid,
     color: 'purple'
   },
@@ -148,7 +137,7 @@ const ALL_AVAILABLE_CARDS: CardDefinition[] = [
   {
     id: 'workforce_status',
     title: 'حالة الكادر الميداني المتاح',
-    category: 'الموارد البشرية والدوام',
+    category: 'الكادر والجاهزية',
     description: 'متابعة توزيع الفنيين بين المتاحين والمشغولين بمهام ميدانية',
     icon: Users,
     color: 'teal'
@@ -159,14 +148,13 @@ const DEFAULT_CARD_IDS = [
   'send_task',
   'quick_stats',
   'active_tasks',
-  'daily_attendance',
   'manual_points',
   'quick_links',
   'top_performers',
   'workforce_status'
 ];
 
-const STORAGE_KEY = 'futurex_owner_dashboard_cards_v2';
+const STORAGE_KEY = 'futurex_owner_dashboard_cards_v3';
 
 export default function OwnerDashboardView({
   employees,
@@ -176,7 +164,6 @@ export default function OwnerDashboardView({
   pointsRules,
   userRole,
   manualPoints = [],
-  attendanceRecords: propAttendanceRecords = [],
   onStartTask,
   onCompleteTask,
   onPauseTask,
@@ -187,21 +174,6 @@ export default function OwnerDashboardView({
   onExecuteManualPoints,
   onNavigateTab
 }: OwnerDashboardViewProps) {
-  // State for attendance records
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(propAttendanceRecords);
-
-  useEffect(() => {
-    if (propAttendanceRecords && propAttendanceRecords.length > 0) {
-      setAttendanceRecords(propAttendanceRecords);
-      return;
-    }
-    const unsub = subscribeAttendanceRecords(
-      (recs) => setAttendanceRecords(recs),
-      (err) => console.error('Attendance sub error in OwnerDashboardView:', err)
-    );
-    return () => unsub();
-  }, [propAttendanceRecords]);
-
   // State for active cards on dashboard
   const [activeCardIds, setActiveCardIds] = useState<string[]>(() => {
     try {
@@ -220,43 +192,26 @@ export default function OwnerDashboardView({
   const [showAddCardModal, setShowAddCardModal] = useState(false);
 
   // Modal State for Workforce Status Drilldown
-  const [workforceModalType, setWorkforceModalType] = useState<'total' | 'present' | 'busy' | 'ready' | 'pending_approval' | null>(null);
+  const [workforceModalType, setWorkforceModalType] = useState<'total' | 'busy' | 'ready' | 'pending_approval' | null>(null);
   const [workforceSearchQuery, setWorkforceSearchQuery] = useState('');
-
-  // Workforce Readiness Derived Calculations
-  const todayStr = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }, []);
 
   // 1. All active non-terminated employees
   const activeEmployeesList = useMemo(() => {
     return employees.filter((e) => e.status !== 'terminated');
   }, [employees]);
 
-  // 2. Attendance Map for Today
-  const todayAttendanceMap = useMemo(() => {
-    const map = new Map<string, AttendanceRecord>();
-    (attendanceRecords || []).forEach((r) => {
-      if (r.date === todayStr && !r.isDeleted && (r.status === 'present' || r.status === 'late' || !!r.checkInTime)) {
-        map.set(r.employeeId, r);
-      }
-    });
-    return map;
-  }, [attendanceRecords, todayStr]);
-
-  // 3. Effective Active Tasks (falls back to filtering allTasks if activeTasks is empty)
+  // 2. Effective Active Tasks (falls back to filtering allTasks if activeTasks is empty)
   const effectiveActiveTasks = useMemo(() => {
     if (activeTasks && activeTasks.length > 0) return activeTasks;
     return (allTasks || []).filter((t) => t.status === 'active' || t.status === 'paused' || t.status === 'pending');
   }, [activeTasks, allTasks]);
 
-  // 3.1 Pending Approval Tasks (tasks dispatched to technician and awaiting their approval/acceptance)
+  // 2.1 Pending Approval Tasks (tasks dispatched to technician and awaiting their approval/acceptance)
   const pendingApprovalTasks = useMemo(() => {
     return effectiveActiveTasks.filter((t) => t.status === 'pending' && !t.parentTaskId);
   }, [effectiveActiveTasks]);
 
-  // 4. Map of Employee ID to running active task(s)
+  // 3. Map of Employee ID to running active task(s)
   const busyEmployeeTaskMap = useMemo(() => {
     const map = new Map<string, Task[]>();
     effectiveActiveTasks.forEach((t) => {
@@ -271,20 +226,15 @@ export default function OwnerDashboardView({
     return map;
   }, [effectiveActiveTasks]);
 
-  // 5. Present Employees List (checked in today)
-  const presentEmployeesList = useMemo(() => {
-    return activeEmployeesList.filter((e) => todayAttendanceMap.has(e.id));
-  }, [activeEmployeesList, todayAttendanceMap]);
-
-  // 6. Busy Employees List (currently assigned an active running task)
+  // 4. Busy Employees List (currently assigned an active running task)
   const busyEmployeesList = useMemo(() => {
     return activeEmployeesList.filter((e) => busyEmployeeTaskMap.has(e.id));
   }, [activeEmployeesList, busyEmployeeTaskMap]);
 
-  // 7. Ready / Waiting Employees List (Technicians only, checked in today AND have NO active tasks)
+  // 5. Ready / Waiting Employees List (Technicians only who have NO active running tasks)
   const readyEmployeesList = useMemo(() => {
-    return presentEmployeesList.filter((e) => isTechnicianEmployee(e) && !busyEmployeeTaskMap.has(e.id));
-  }, [presentEmployeesList, busyEmployeeTaskMap]);
+    return activeEmployeesList.filter((e) => isTechnicianEmployee(e) && !busyEmployeeTaskMap.has(e.id));
+  }, [activeEmployeesList, busyEmployeeTaskMap]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -443,39 +393,6 @@ export default function OwnerDashboardView({
           </div>
         );
 
-      case 'daily_attendance':
-        return (
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 md:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-black text-slate-900">سجل الحضور والعمليات اليومية</h2>
-                  <p className="text-xs text-slate-500 font-medium">
-                    متابعة حضور الكادر الوظيفي والتأخيرات والإنصراف اليومي
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onNavigateTab('attendance_management')}
-                className="text-xs font-black text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
-              >
-                <span>إدارة الحضور</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <DailyOperationsCenter
-              employees={employees}
-              onNavigateTab={(tab) => onNavigateTab(tab)}
-            />
-          </div>
-        );
-
       case 'manual_points':
         if (!onExecuteManualPoints) return null;
         return (
@@ -512,29 +429,43 @@ export default function OwnerDashboardView({
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <button
                 type="button"
-                onClick={() => onNavigateTab('employee_hr_center')}
-                className="p-4 bg-purple-50/60 hover:bg-purple-100/80 border border-purple-200/80 rounded-2xl transition-all cursor-pointer text-right flex flex-col justify-between space-y-2 group"
+                onClick={() => onNavigateTab('employees')}
+                className="p-4 bg-blue-50/60 hover:bg-blue-100/80 border border-blue-200/80 rounded-2xl transition-all cursor-pointer text-right flex flex-col justify-between space-y-2 group"
               >
-                <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
                   <Users className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="font-black text-xs text-purple-950 block group-hover:text-purple-700">الموظفون والرواتب</span>
-                  <span className="text-[10px] text-purple-700 font-medium block">الملفات والمسيرات</span>
+                  <span className="font-black text-xs text-blue-950 block group-hover:text-blue-700">إدارة الموظفين</span>
+                  <span className="text-[10px] text-blue-700 font-medium block">الكادر الفني والبيانات</span>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => onNavigateTab('requests_center')}
+                onClick={() => onNavigateTab('task_management')}
+                className="p-4 bg-indigo-50/60 hover:bg-indigo-100/80 border border-indigo-200/80 rounded-2xl transition-all cursor-pointer text-right flex flex-col justify-between space-y-2 group"
+              >
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <ClipboardList className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-black text-xs text-indigo-950 block group-hover:text-indigo-700">إدارة المهام</span>
+                  <span className="text-[10px] text-indigo-700 font-medium block">إسناد ومتابعة الميدان</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onNavigateTab('leaderboard')}
                 className="p-4 bg-amber-50/60 hover:bg-amber-100/80 border border-amber-200/80 rounded-2xl transition-all cursor-pointer text-right flex flex-col justify-between space-y-2 group"
               >
                 <div className="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-xs">
-                  <GitPullRequest className="w-4 h-4" />
+                  <Trophy className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="font-black text-xs text-amber-950 block group-hover:text-amber-700">مركز الطلبات</span>
-                  <span className="text-[10px] text-amber-700 font-medium block">الإجازات والطلبات</span>
+                  <span className="font-black text-xs text-amber-950 block group-hover:text-amber-700">لوحة الصدارة</span>
+                  <span className="text-[10px] text-amber-700 font-medium block">ترتيب وتنافس الفنيين</span>
                 </div>
               </button>
 
@@ -554,20 +485,6 @@ export default function OwnerDashboardView({
 
               <button
                 type="button"
-                onClick={() => onNavigateTab('audit_activity_center')}
-                className="p-4 bg-rose-50/60 hover:bg-rose-100/80 border border-rose-200/80 rounded-2xl transition-all cursor-pointer text-right flex flex-col justify-between space-y-2 group"
-              >
-                <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="font-black text-xs text-rose-950 block group-hover:text-rose-700">سجل التدقيق</span>
-                  <span className="text-[10px] text-rose-700 font-medium block">مراقبة الأنشطة</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => onNavigateTab('settings')}
                 className="p-4 bg-slate-100/80 hover:bg-slate-200/80 border border-slate-200 rounded-2xl transition-all cursor-pointer text-right flex flex-col justify-between space-y-2 group"
               >
@@ -576,7 +493,7 @@ export default function OwnerDashboardView({
                 </div>
                 <div>
                   <span className="font-black text-xs text-slate-900 block group-hover:text-slate-700">إعدادات النظام</span>
-                  <span className="text-[10px] text-slate-500 font-medium block">قواعد النقاط</span>
+                  <span className="text-[10px] text-slate-500 font-medium block">قواعد النقاط والأنواع</span>
                 </div>
               </button>
 
@@ -692,7 +609,7 @@ export default function OwnerDashboardView({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               {/* 1. Total Employees */}
               <button
                 type="button"
@@ -719,33 +636,7 @@ export default function OwnerDashboardView({
                 </span>
               </button>
 
-              {/* 2. Present Today */}
-              <button
-                type="button"
-                onClick={() => {
-                  setWorkforceModalType('present');
-                  setWorkforceSearchQuery('');
-                }}
-                className="p-4 bg-blue-50/70 hover:bg-blue-100/60 border border-blue-200/80 hover:border-blue-300 rounded-2xl text-right transition-all hover:shadow-xs group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-blue-900 group-hover:text-blue-950">الموظفين الحاضرين</span>
-                  <div className="w-7 h-7 rounded-xl bg-blue-100 group-hover:bg-blue-200 text-blue-700 flex items-center justify-center transition-colors">
-                    <UserCheck className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-                <span className="text-xl font-black text-blue-950 font-mono mt-2 block">
-                  {presentEmployeesList.length} <span className="text-xs font-medium text-blue-600">حاضر</span>
-                </span>
-                <span className="text-[10px] text-blue-600/80 font-medium mt-1 flex items-center justify-between">
-                  <span>سجلوا حضورهم اليوم</span>
-                  <span className="text-blue-700 font-bold group-hover:underline flex items-center gap-0.5">
-                    عرض الحاضرين 🟢
-                  </span>
-                </span>
-              </button>
-
-              {/* 3. Busy Technicians */}
+              {/* 2. Busy Technicians */}
               <button
                 type="button"
                 onClick={() => {
@@ -1168,16 +1059,14 @@ export default function OwnerDashboardView({
                 <div>
                   <h3 className="font-extrabold text-base text-white flex items-center gap-2">
                     {workforceModalType === 'total' && `👥 إجمالي الموظفين المسجلين (${activeEmployeesList.length})`}
-                    {workforceModalType === 'present' && `🟢 الموظفين الحاضرين اليوم (${presentEmployeesList.length})`}
                     {workforceModalType === 'busy' && `⚡ فنيون وموظفون مشغولون بمهام (${busyEmployeesList.length})`}
-                    {workforceModalType === 'ready' && `✨ جاهزون منتظرون لمهام جديدة (${readyEmployeesList.length})`}
+                    {workforceModalType === 'ready' && `✨ جاهزون ومتاحون لمهام جديدة (${readyEmployeesList.length})`}
                     {workforceModalType === 'pending_approval' && `⏳ طلبات بانتظار موافقة الفني (${pendingApprovalTasks.length})`}
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {workforceModalType === 'total' && 'قائمة الموظفين غير المنتهية خدماتهم وحالتهم اليومية بالكامل'}
-                    {workforceModalType === 'present' && 'قائمة الموظفين الذين سجلوا بصمة حضور اليوم'}
+                    {workforceModalType === 'total' && 'قائمة الموظفين غير المنتهية خدماتهم وحالتهم بالكامل'}
                     {workforceModalType === 'busy' && 'الفنيون والموظفون الذين لديهم مهام قيد التنفيذ حالياً'}
-                    {workforceModalType === 'ready' && 'الفنيون الحاضرون اليوم المصنفون كـ (فني) ولا تتواجد لديهم أي مهام جارية'}
+                    {workforceModalType === 'ready' && 'الفنيون المصنفون كـ (فني) ولا تتواجد لديهم أي مهام جارية حالياً'}
                     {workforceModalType === 'pending_approval' && 'المهام والطلبات المرسلة للفنيين ولم يوافق عليها الفني أو يقبلها بعد'}
                   </p>
                 </div>
@@ -1328,7 +1217,6 @@ export default function OwnerDashboardView({
 
                 let list: Employee[] = [];
                 if (workforceModalType === 'total') list = activeEmployeesList;
-                else if (workforceModalType === 'present') list = presentEmployeesList;
                 else if (workforceModalType === 'busy') list = busyEmployeesList;
                 else if (workforceModalType === 'ready') list = readyEmployeesList;
 
@@ -1352,10 +1240,8 @@ export default function OwnerDashboardView({
                 }
 
                 return list.map((emp) => {
-                  const att = todayAttendanceMap.get(emp.id);
                   const tasks = busyEmployeeTaskMap.get(emp.id) || [];
                   const isBusy = tasks.length > 0;
-                  const isPresent = !!att;
 
                   // Arabic role label
                   const roleLabel =
@@ -1363,8 +1249,6 @@ export default function OwnerDashboardView({
                     emp.role === 'field' ? 'فني ميداني' :
                     emp.role === 'admin' ? 'مدير نظام' :
                     emp.role === 'owner' ? 'مالك الشركة' :
-                    emp.role === 'hr' ? 'موارد بشرية' :
-                    emp.role === 'accountant' ? 'محاسب' :
                     emp.role === 'worker' ? 'عامل' : emp.role || 'موظف';
 
                   return (
@@ -1375,8 +1259,7 @@ export default function OwnerDashboardView({
                       <div className="flex items-start gap-3">
                         <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 ${
                           isBusy ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                          isPresent ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
-                          'bg-slate-100 text-slate-700 border border-slate-200'
+                          'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         }`}>
                           {emp.name.charAt(0)}
                         </div>
@@ -1395,24 +1278,6 @@ export default function OwnerDashboardView({
                                 <Phone className="w-3 h-3 text-slate-400" />
                                 <span>{emp.phone}</span>
                               </a>
-                            )}
-                          </div>
-
-                          {/* Attendance Info */}
-                          <div className="flex items-center gap-2 text-xs">
-                            {isPresent ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
-                                <UserCheck className="w-3 h-3 text-emerald-600" />
-                                حاضر اليوم {att.checkInTime ? `(${new Date(att.checkInTime).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })})` : ''}
-                              </span>
-                            ) : (emp.isExemptFromFingerprint || emp.exemptFromFingerprint) ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-800 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-lg">
-                                🛡️ غير مشمول بالبصمة
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-lg">
-                                🔴 لم يسجل بصمة حضور اليوم
-                              </span>
                             )}
                           </div>
 

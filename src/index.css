@@ -38,3 +38,41 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
 }
+
+/* ==========================================================================
+   إخفاء شارة Netlify وجميع النوافذ المنبثقة التابعة لها
+   ========================================================================== */
+#net-lify-badge,
+.netlify-badge,
+.netlify-deploy-badge,
+a[href*="netlify.com/?utm_source"],
+div:has(> a[href*="netlify.com"]),
+iframe[src*="netlify"],
+iframe[id*="netlify"],
+netlify-drawer,
+#netlify-drawer,
+.netlify-drawer,
+#netlify-badge,
+[id*="netlify-badge"],
+[class*="netlify-badge"],
+[id*="netlify-drawer"],
+[class*="netlify-drawer"],
+[data-netlify-drawer],
+div[data-netlify-identity],
+div[data-netlify-preview],
+a[href*="netlify.com"] img,
+a[href*="netlify.app"] img,
+.netlify-banner,
+#netlify-banner {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  width: 0 !important;
+  height: 0 !important;
+  z-index: -9999 !important;
+}
+

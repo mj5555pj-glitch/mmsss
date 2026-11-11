@@ -7,7 +7,7 @@ import { sendOneSignalToEmployee, sendOneSignalPushNotification } from '../lib/o
 interface HeaderProps {
   employeeCount: number;
   activeTasksCount: number;
-  userRole: 'owner' | 'supervisor' | 'manager' | 'technician';
+  userRole: 'owner' | 'supervisor' | 'manager' | 'technician' | 'accountant' | string;
   employees?: Employee[];
   onLogout: () => void;
 }

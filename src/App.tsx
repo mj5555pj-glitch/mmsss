@@ -9,7 +9,6 @@ import {
   subscribeTasks,
   subscribeSettings,
   subscribeCompanySettings,
-  subscribeAttendanceRecords,
   saveEmployee,
   deleteEmployee,
   saveTask,
@@ -59,22 +58,14 @@ import ActiveTasksView from './components/ActiveTasksView';
 import TechnicianDashboard from './components/TechnicianDashboard';
 import AllTasksView from './components/AllTasksView';
 import VersionUpdateBanner from './components/VersionUpdateBanner';
-import DailyOperationsCenter from './components/DailyOperationsCenter';
-import AttendanceManagement from './components/AttendanceManagement';
-import RequestsCenter from './components/RequestsCenter';
-import PayrollManagement from './components/PayrollManagement';
-import HRSettings from './components/HRSettings';
 import ProductionReadiness from './components/ProductionReadiness';
-import EmployeeHRCenter from './components/EmployeeHRCenter';
 import TaskManagementCenter from './components/TaskManagementCenter';
 import SystemDiagnostics from './components/SystemDiagnostics';
-import TechnicianCycleHistoryCard from './components/TechnicianCycleHistoryCard';
 import TechnicianPointsView from './components/TechnicianPointsView';
-import TechnicianPayrollView from './components/TechnicianPayrollView';
 
 export default function App() {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'task_management' | 'production_readiness' | 'system_diagnostics' | 'hr_settings' | 'payroll_management' | 'requests_center' | 'attendance_management' | 'active_tasks' | 'all_tasks' | 'employees' | 'leaderboard' | 'reports' | 'settings' | 'about' | 'tasks' | 'achievements' | 'employee_hr_center' | 'cycle_history' | 'points' | 'payroll'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'task_management' | 'production_readiness' | 'system_diagnostics' | 'active_tasks' | 'all_tasks' | 'employees' | 'leaderboard' | 'reports' | 'settings' | 'about' | 'tasks' | 'achievements' | 'points'>('dashboard');
   const [selectedEmployeeForTask, setSelectedEmployeeForTask] = useState<string | undefined>(undefined);
 
   const handleNavigateTab = (tab: string, employeeId?: string) => {
@@ -85,6 +76,9 @@ export default function App() {
     if (tab === 'tasks' && userRole !== 'technician') {
       targetTab = 'task_management';
     }
+    if (['employee_hr_center', 'attendance_management', 'payroll_management', 'requests_center', 'hr_settings', 'payroll'].includes(tab)) {
+      targetTab = 'employees';
+    }
     setActiveTab(targetTab as any);
   };
 
@@ -94,7 +88,6 @@ export default function App() {
   const [manualPoints, setManualPoints] = useState<ManualPointsRecord[]>(() => getManualPointsCachedSync());
   const [taskTypes, setTaskTypes] = useState<DbTaskType[]>([]);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [pointsRules, setPointsRules] = useState<PointsRules>({
     delayDeductionPerMinute: 0.5,
     maxDeduction: 10,
@@ -104,9 +97,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
 
-  // Lazy load points history on demand when points/leaderboard/reports/payroll tabs are opened
+  // Lazy load points history on demand when points/leaderboard/reports tabs are opened
   useEffect(() => {
-    if (['leaderboard', 'achievements', 'reports', 'payroll_management', 'points', 'payroll'].includes(activeTab)) {
+    if (['leaderboard', 'achievements', 'reports', 'points'].includes(activeTab)) {
       getManualPoints().then(recs => {
         setManualPoints(recs);
       }).catch(err => console.warn('Manual points lazy load warning:', err));
@@ -169,7 +162,6 @@ export default function App() {
     let unsubscribePointsRules: () => void;
     let unsubscribeUsers: () => void;
     let unsubscribeCompanySettings: () => void;
-    let unsubscribeAttendanceRecords: () => void;
 
     async function setupFirebase() {
       try {
@@ -277,14 +269,6 @@ export default function App() {
           (err) => console.error('Company settings sub error:', err)
         );
 
-        unsubscribeAttendanceRecords = subscribeAttendanceRecords(
-          (recs) => {
-            if (!isMounted) return;
-            setAttendanceRecords(recs);
-          },
-          (err) => console.error('Attendance records sub error:', err)
-        );
-
         // If the component unmounted while we were establishing subscriptions, unsubscribe them immediately
         if (!isMounted) {
           if (unsubscribeEmployees) unsubscribeEmployees();
@@ -294,7 +278,6 @@ export default function App() {
           if (unsubscribePointsRules) unsubscribePointsRules();
           if (unsubscribeUsers) unsubscribeUsers();
           if (unsubscribeCompanySettings) unsubscribeCompanySettings();
-          if (unsubscribeAttendanceRecords) unsubscribeAttendanceRecords();
         }
       } catch (err) {
         if (!isMounted) return;
@@ -315,7 +298,6 @@ export default function App() {
       if (unsubscribePointsRules) unsubscribePointsRules();
       if (unsubscribeUsers) unsubscribeUsers();
       if (unsubscribeCompanySettings) unsubscribeCompanySettings();
-      if (unsubscribeAttendanceRecords) unsubscribeAttendanceRecords();
     };
   }, []);
 
@@ -673,9 +655,9 @@ export default function App() {
     assignedDate?: string,
     parentTaskId?: string
   ) => {
-    const checkResult = canAssignTaskToTechnician(employeeId, employees, attendanceRecords, companySettings);
+    const checkResult = canAssignTaskToTechnician(employeeId, employees);
     if (!checkResult.allowed) {
-      const msg = checkResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.';
+      const msg = checkResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني.';
       alert(msg);
       throw new Error(msg);
     }
@@ -1370,9 +1352,9 @@ export default function App() {
     subscriberPhone?: string,
     assignedDate?: string
   ) => {
-    const checkResult = canAssignTaskToTechnician(employeeId, employees, attendanceRecords, companySettings);
+    const checkResult = canAssignTaskToTechnician(employeeId, employees);
     if (!checkResult.allowed) {
-      const msg = checkResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني قبل تسجيل بصمة الحضور.';
+      const msg = checkResult.errorMessage || 'لا يمكن إسناد مهمة لهذا الفني.';
       alert(msg);
       throw new Error(msg);
     }
@@ -1635,7 +1617,6 @@ export default function App() {
       return [
         { id: 'tasks' as const, label: 'المهام', icon: Clock },
         { id: 'points' as const, label: 'النقاط', icon: Award },
-        { id: 'payroll' as const, label: 'الراتب', icon: DollarSign },
       ];
     }
     if (userRole === 'supervisor') {
@@ -1647,21 +1628,12 @@ export default function App() {
         { id: 'about' as const, label: 'عن النظام', icon: Info },
       ];
     }
-    if (userRole === 'accountant') {
-      return [
-        { id: 'dashboard' as const, label: 'الرئيسية', icon: LayoutDashboard },
-        { id: 'task_management' as const, label: 'إدارة المهام', icon: ClipboardList },
-        { id: 'reports' as const, label: 'التقارير', icon: FileText },
-        { id: 'employee_hr_center' as const, label: 'الموارد البشرية HR', icon: Users },
-        { id: 'about' as const, label: 'عن النظام', icon: Info },
-      ];
-    }
-    // Owner & Manager
+    // Owner & Manager & others
     return [
       { id: 'dashboard' as const, label: 'الرئيسية', icon: LayoutDashboard },
       { id: 'task_management' as const, label: 'إدارة المهام', icon: ClipboardList },
+      { id: 'employees' as const, label: 'الموظفين', icon: Users },
       { id: 'reports' as const, label: 'التقارير', icon: FileText },
-      { id: 'employee_hr_center' as const, label: 'الموارد البشرية HR', icon: Users },
       { id: 'settings' as const, label: 'الإعدادات', icon: Settings },
       { id: 'about' as const, label: 'عن النظام', icon: Info },
     ];
@@ -1669,11 +1641,8 @@ export default function App() {
 
   // Ensure unauthorized roles cannot access restricted tabs
   useEffect(() => {
-    if (userRole === 'technician' && activeTab !== 'tasks' && activeTab !== 'points' && activeTab !== 'payroll' && activeTab !== 'cycle_history' && activeTab !== 'about' && activeTab !== 'dashboard') {
+    if (userRole === 'technician' && activeTab !== 'tasks' && activeTab !== 'points' && activeTab !== 'about' && activeTab !== 'dashboard') {
       setActiveTab('dashboard');
-    }
-    if (userRole === 'supervisor' && activeTab === 'employee_hr_center') {
-      setActiveTab('task_management');
     }
   }, [userRole, activeTab]);
 
@@ -1787,16 +1756,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'payroll' && userRole === 'technician' && (
-            <TechnicianPayrollView
-              employee={employees.find(emp => emp.id === (safeGetLocalStorage('futurex_logged_in_employee_id') || ''))}
-              settings={companySettings}
-              tasks={tasks}
-              manualPoints={manualPoints}
-              allEmployees={employees}
-            />
-          )}
-
           {activeTab === 'dashboard' && (userRole === 'owner' || userRole === 'supervisor' || userRole === 'manager') && (
             <OwnerDashboardView
               employees={employees}
@@ -1806,7 +1765,6 @@ export default function App() {
               pointsRules={pointsRules}
               userRole={userRole as any}
               manualPoints={manualPoints}
-              attendanceRecords={attendanceRecords}
               onStartTask={handleStartTask}
               onCompleteTask={handleCompleteTask}
               onPauseTask={handlePauseTask}
@@ -1835,7 +1793,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'task_management' && (userRole === 'owner' || userRole === 'manager' || userRole === 'supervisor' || userRole === 'accountant') && (
+          {activeTab === 'task_management' && (userRole === 'owner' || userRole === 'manager' || userRole === 'supervisor') && (
             <TaskManagementCenter
               employees={employees}
               activeTasks={activeTasks}
@@ -1867,46 +1825,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'employee_hr_center' && (userRole === 'owner' || userRole === 'manager' || userRole === 'accountant') && (
-            <EmployeeHRCenter
-              employees={employees}
-              tasks={tasks}
-              userRole={userRole as any}
-              onAddEmployee={handleAddEmployee}
-              onEditEmployee={handleEditEmployee}
-              onDeleteEmployee={handleDeleteEmployee}
-            />
-          )}
 
-          {activeTab === 'hr_settings' && userRole === 'owner' && (
-            <HRSettings
-              employees={employees}
-              userRole={userRole as any}
-            />
-          )}
-
-          {activeTab === 'payroll_management' && (userRole === 'owner' || userRole === 'manager' || userRole === 'accountant') && (
-            <PayrollManagement
-              employees={employees}
-              tasks={tasks}
-              manualPoints={manualPoints}
-              userRole={userRole as any}
-            />
-          )}
-
-          {activeTab === 'requests_center' && (userRole === 'owner' || userRole === 'manager' || userRole === 'supervisor') && (
-            <RequestsCenter
-              employees={employees}
-              userRole={userRole}
-            />
-          )}
-
-          {activeTab === 'attendance_management' && (userRole === 'owner' || userRole === 'manager') && (
-            <AttendanceManagement
-              employees={employees}
-              userRole={userRole}
-            />
-          )}
 
           {activeTab === 'active_tasks' && (userRole === 'owner' || userRole === 'supervisor' || userRole === 'manager') && (
             <ActiveTasksView
@@ -1951,7 +1870,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'employees' && userRole === 'owner' && (
+          {activeTab === 'employees' && (userRole === 'owner' || userRole === 'manager') && (
             <EmployeeManager
               employees={employees}
               onAddEmployee={handleAddEmployee}
@@ -1981,12 +1900,6 @@ export default function App() {
               userRole={userRole}
               onDeleteManualPoint={handleDeleteManualPoint}
               onEditManualPoint={handleEditManualPoint}
-            />
-          )}
-
-          {activeTab === 'cycle_history' && userRole === 'technician' && (
-            <TechnicianCycleHistoryCard
-              employee={employees.find(emp => emp.id === (safeGetLocalStorage('futurex_logged_in_employee_id') || '')) || employees[0]}
             />
           )}
 

@@ -8,12 +8,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Employee, Task, ManualPointsRecord, DbTaskType, TaskType } from '../types';
 import { isToday, formatArabicTimeOnly, formatArabicDateOnly, formatMsToHMS, getTaskTimeLimitMinutes } from '../utils';
 import CopyPhoneButton from './CopyPhoneButton';
-import TechnicianAttendanceCard from './TechnicianAttendanceCard';
-import TechnicianCycleHistoryCard from './TechnicianCycleHistoryCard';
-import TechnicianOvertimeCard from './TechnicianOvertimeCard';
-import TechnicianLeaveCard from './TechnicianLeaveCard';
-import TechnicianPayrollCard from './TechnicianPayrollCard';
-import TechnicianRewardCard from './TechnicianRewardCard';
 import TechnicianPointsCard from './TechnicianPointsCard';
 
 interface TechnicianDashboardProps {
@@ -568,51 +562,21 @@ export default function TechnicianDashboard({
       </motion.div>
 
       {/* ======================================================== */}
-      {/* HR & ADMINISTRATIVE CARDS (2-6 STRICT ORDER) */}
-      {/* 2️⃣ تسجيل الحضور والانصراف (Attendance) */}
-      {/* 3️⃣ راتبي (Payroll) */}
-      {/* 4️⃣ مكافآتي (Reward) */}
-      {/* 5️⃣ الإجازات (Leaves) */}
-      {/* 6️⃣ الوقت الإضافي (Overtime) */}
+      {/* PERFORMANCE & POINTS CARD */}
       {/* ======================================================== */}
       <div className="space-y-4 pt-2">
         <div className="flex items-center gap-2 px-1">
           <div className="w-2.5 h-2.5 rounded-full bg-blue-600"></div>
-          <h3 className="font-black text-slate-800 text-sm">خدمات الشؤون الإدارية والمالية والتقييم للموظف</h3>
+          <h3 className="font-black text-slate-800 text-sm">سجل تقييم ونقاط الفني</h3>
         </div>
 
-        {/* 1️⃣ عدد النقاط الكلي للدورة وسجل النقاط */}
+        {/* عدد النقاط وسجل التقييم */}
         <TechnicianPointsCard
           employee={employee}
           tasks={tasks}
           manualPoints={manualPoints}
           taskTypes={taskTypes}
         />
-
-        {/* 2️⃣ تسجيل الحضور والانصراف */}
-        <TechnicianAttendanceCard employee={employee} />
-
-        {/* 3️⃣ راتبي */}
-        <TechnicianPayrollCard
-          employee={employee}
-          tasks={tasks}
-          manualPoints={manualPoints}
-          allEmployees={allEmployees}
-        />
-
-        {/* 4️⃣ مكافآتي */}
-        <TechnicianRewardCard
-          employee={employee}
-          tasks={tasks}
-          manualPoints={manualPoints}
-          allEmployees={allEmployees}
-        />
-
-        {/* 5️⃣ الإجازات */}
-        <TechnicianLeaveCard employee={employee} />
-
-        {/* 6️⃣ الوقت الإضافي */}
-        <TechnicianOvertimeCard employee={employee} />
       </div>
 
       {/* Rejection Reason Modal Sheet */}

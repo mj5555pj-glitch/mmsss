@@ -30,7 +30,10 @@
         "totalPausedMs": { "type": "number" },
         "subscriberName": { "type": "string" },
         "subscriberPhone": { "type": "string" },
-        "assignedDate": { "type": "string" }
+        "assignedDate": { "type": "string" },
+        "paymentStatus": { "type": "string", "enum": ["collected", "free"] },
+        "collectedAmount": { "type": "number" },
+        "paymentNotes": { "type": "string" }
       },
       "required": ["id", "employeeId", "employeeName", "taskType", "points", "startTime", "status"]
     },
